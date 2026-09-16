@@ -1,0 +1,15 @@
+# CLI/TUI overlay fused from pro-v4. Host HTTP routes wait for webServer, so
+# this layer is safe on headless and tui profiles that have no Host.
+- insert:
+    - id: dsh-desktop-manager
+      name: dsh-desktop-manager
+    - id: dsh-memory
+      name: dsh-layered-memory
+    - id: dsh-quick-commands
+      name: dsh-quick-commands
+    - id: dsh-retry
+      name: dsh-retry
+    - id: dsh-open-external
+      name: dsh-open-external
+    - id: infinite-gen-1
+      name: dsh-infinite-gen-1

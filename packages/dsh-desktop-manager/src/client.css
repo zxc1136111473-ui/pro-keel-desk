@@ -1,0 +1,592 @@
+/* 桌面管理页样式。
+   只使用 ui-theme 真实定义的 --dsw-* 语义令牌：深浅主题切换时自动翻转，
+   不出现任何字面色值。命名统一加 dsm- 前缀，避免与宿主样式相撞。 */
+
+.dsm-root {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  gap: 20px;
+  padding: 4px 2px;
+}
+
+.dsm-head h2 {
+  margin: 0 0 6px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -.01em;
+}
+
+.dsm-head p {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.dsm-list {
+  display: grid;
+  gap: 10px;
+}
+
+/* 插件卡片：与设置面板其它区块同一套圆角与描边节奏。 */
+.dsm-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.dsm-card-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dsm-card-title {
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dsm-card-id {
+  margin-left: 6px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+/* 状态行用 StateDot 组件表达语义色，不用彩色文字、更不用表情。 */
+.dsm-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.dsm-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dsm-action-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.dsm-action-group + .dsm-action-group {
+  padding-left: 12px;
+  border-left: 1px solid var(--dsw-alias-border-l1);
+}
+
+@media (max-width: 560px) {
+  .dsm-action-group + .dsm-action-group {
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+
+.dsm-logs {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 安装/启动进度条：百分比 + 步骤 + 预计耗时。 */
+.dsm-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.dsm-progress-bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-3);
+}
+
+.dsm-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--dsw-alias-accent, var(--dsw-alias-label-primary));
+  transition: width 0.4s ease;
+}
+
+.dsm-progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.dsm-progress-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsm-progress-pct {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.dsm-progress-eta {
+  white-space: nowrap;
+}
+
+.dsm-logs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-weight: 560;
+}
+
+.dsm-logs-running {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.dsm-terminal {
+  min-height: 200px;
+  flex: 1;
+}
+
+.dsm-apply-row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 提示区：靠留白与层次区分，不画左侧竖线。 */
+.dsm-note {
+  margin: 0;
+  padding: 11px 13px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 10px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-layer-2);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+/* 重启提示：文案与按钮同行，按钮保持普通尺寸靠右，不占满宽度。 */
+.dsm-apply-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dsm-apply-note > span {
+  min-width: 0;
+}
+
+.dsm-apply-note :global(button) {
+  flex: none;
+  white-space: nowrap;
+}
+
+.dsm-empty {
+  padding: 40px 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* ---- 冷咖啡五模型工作台：profile 卡片 ---- */
+.dsm-hub {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dsm-hub-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.dsm-card-sub {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* 冷咖啡插件的项目地址：低调可点，hover 提亮。 */
+.dsm-card-link {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 1.5;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsm-card-link:hover {
+  color: var(--dsw-alias-brand-primary);
+  text-decoration: underline;
+}
+
+.dsm-card-patterns {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.dsm-card-side {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+/* Reverify：整卡改成「状态 → 清单 → 缺件才出按钮」，避免右上角永远挂着安装。 */
+.dsm-card-stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.dsm-card-stack .dsm-actions {
+  justify-content: flex-end;
+}
+
+.dsm-cap-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dsm-cap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.dsm-cap-body {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dsm-cap-name {
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dsm-cap-note {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.dsm-cap-mark {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.dsm-cap-mark[data-on] {
+  color: var(--dsw-alias-label-primary);
+}
+
+/* ---- 输入框里的冷咖啡破甲开关（conversation.input.left） ---- */
+.dsm-composer-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.dsm-composer-toggle[data-on] {
+  color: var(--dsw-alias-label-primary);
+}
+
+.dsm-toggle-switch {
+  position: relative;
+  box-sizing: border-box;
+  width: 30px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-3);
+  cursor: pointer;
+  transition: background-color .18s ease, border-color .18s ease;
+  flex: none;
+}
+
+.dsm-toggle-switch:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.dsm-composer-toggle[data-on] .dsm-toggle-switch {
+  border-color: var(--dsw-alias-brand-primary);
+  background: var(--dsw-alias-brand-primary);
+}
+
+.dsm-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .25);
+  transition: transform .18s ease;
+}
+
+.dsm-composer-toggle[data-on] .dsm-toggle-knob {
+  transform: translateX(12px);
+}
+
+.dsm-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+  white-space: nowrap;
+}
+
+/* 「冷咖啡」口令：点击复制。图标提示可点，复制成功短暂变色。 */
+.dsm-phrase-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: color .15s ease;
+}
+
+.dsm-phrase-copy:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+.dsm-phrase-copy svg {
+  opacity: .6;
+}
+
+.dsm-phrase-copy:hover svg {
+  opacity: 1;
+}
+
+.dsm-phrase-copy[data-copied] {
+  color: var(--dsw-alias-brand-primary);
+}
+
+.dsm-phrase-copy[data-copied] svg {
+  opacity: 1;
+}
+
+.dsm-copy-toast {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2147483647;
+  padding: 10px 18px;
+  border-radius: 10px;
+  background: rgba(20, 20, 20, .92);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.4;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
+  pointer-events: none;
+}
+
+.dsm-copy-toast-err {
+  background: rgba(180, 40, 40, .94);
+}
+
+.dsm-toggle-error {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  color: var(--dsw-alias-label-primary-foreground);
+  background: var(--dsw-alias-risk-danger);
+  font-size: 10px;
+  font-weight: 700;
+  flex: none;
+}
+
+.dsm-runtime {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dsm-runtime-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dsm-plugin-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 全局默认开关：靠右与状态指示分开，颜色仍走语义令牌。 */
+.dsm-default-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  user-select: none;
+}
+
+.dsm-default-toggle input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
+.dsm-default-toggle:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 总开关与逐模型设置的关系说明，紧跟在状态行下方。 */
+.dsm-hub-hint {
+  margin: 0 0 12px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.dsm-mode-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.dsm-mode-chip {
+  padding: 5px 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dsm-mode-chip:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* 暗色下 brand-primary 会翻成浅填充，必须用 on-fill 字色，
+   不能用 label-on-accent/#fff（变量不存在，白底白字）。 */
+.dsm-mode-chip[data-on] {
+  border-color: var(--dsw-alias-button-primary-fill);
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-foreground);
+  font-weight: 600;
+}
+
+.dsm-mode-chip[data-on]:hover {
+  background: var(--dsw-alias-button-primary-hover);
+  border-color: var(--dsw-alias-button-primary-hover);
+  color: var(--dsw-alias-label-primary-foreground);
+}
+
+.dsm-mode-hint {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 1.5;
+  min-width: 0;
+  flex: 1 1 220px;
+}
+
+.dsm-pentagi-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dsm-pentagi-controls .dsm-default-toggle {
+  margin-left: 0;
+}
+
+.dsm-pentagi-port {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.dsm-pentagi-port input,
+.dsm-pentagi-port select {
+  width: auto;
+  min-width: 88px;
+  max-width: 240px;
+  padding: 6px 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+}
