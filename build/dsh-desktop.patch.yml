@@ -1,3 +1,10 @@
+# Native web_search is pinned to official DeepSeek Anthropic search. That
+# endpoint rejects the chat-completions key (401 ****c79a). Route it to the
+# local DuckDuckGo provider registered by dsh-desktop-manager.
+- id: web
+  config:
+    searchProvider: dsh-ddg
+
 # Keep the stock directory-picker (auto) row active: the native backend
 # serves ctx.directoryPicker, so host-side consumers (host.pickDirectory,
 # plugins reading the seam) work unmodified. The client surface keeps its

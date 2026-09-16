@@ -2,6 +2,8 @@
  * 记忆模式运行时开关（官方 settings 服务，live 生效）。
  * 语义：静态 config（cordis.patch.yml，部署上限）AND 运行时开关，两者同时开才工作。
  * settings 服务缺失（如 headless）时退化为恒开——行为与无开关版本一致。
+ * 运行时 schema 默认也必须全开：否则 settings 服务一挂上就把捕获/蒸馏填成 false，
+ * 对话永不进 L0（工作台空状态 + memory.log 无「L0 捕获」）。
  */
 import type { Context } from '@deepseek-ai/cordis';
 // 纯类型导入：拉入 ctx.settings 的 Context 声明合并
@@ -90,8 +92,8 @@ const NS = 'dsh-memory';
 
 const ALWAYS_ON: MemoryLiveSettings = {
   enabled: true,
-  capture: false,
-  distill: false,
+  capture: true,
+  distill: true,
   recall: true,
   reasoningEffort: '',
   distillProvider: '',
@@ -131,8 +133,8 @@ export function liveSettingsSchema(): Schema<MemoryLiveSettings> {
   });
   return Schema.object({
     enabled: Schema.boolean().default(true),
-    capture: Schema.boolean().default(false),
-    distill: Schema.boolean().default(false),
+    capture: Schema.boolean().default(true),
+    distill: Schema.boolean().default(true),
     recall: Schema.boolean().default(true),
     reasoningEffort: Schema.union([...EFFORT_CHOICES]).default(''),
     distillProvider: Schema.string().default(''),

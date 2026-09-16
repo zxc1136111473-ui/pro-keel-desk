@@ -36,6 +36,7 @@ await copyFile(join(pluginRoot, 'src', 'reverify-bridge.py'), join(outDir, 'reve
 await copyFile(join(pluginRoot, 'src', 'pentagi.mjs'), join(outDir, 'pentagi.mjs'))
 await copyFile(join(pluginRoot, 'src', 'pentagi-runtime.mjs'), join(outDir, 'pentagi-runtime.mjs'))
 await copyFile(join(pluginRoot, 'src', 'pentagi-providers.mjs'), join(outDir, 'pentagi-providers.mjs'))
+await copyFile(join(pluginRoot, 'src', 'pentagi-credentials.mjs'), join(outDir, 'pentagi-credentials.mjs'))
 await copyFile(join(pluginRoot, 'src', 'embedder-server.py'), join(outDir, 'embedder-server.py'))
 // 冷咖啡五个 profile 提示词是 host 端运行时资源（lib/index.mjs 相对路径读取）。
 await cp(join(pluginRoot, 'src', 'profiles'), join(outDir, 'profiles'), { recursive: true })

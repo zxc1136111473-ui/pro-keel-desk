@@ -15,86 +15,79 @@ const PLUGIN_VERSION = require2("../package.json").version;
 function registerMemoryRpc(ctx, cfg, stores, logger, status, live, modes, dataDir, rebuild, embedManager, sessionInfo) {
   let holding = false;
   let registeredImpl;
-  const tryRegister = () => {
+  const tryRegister = (scope) => {
     if (holding) return;
-    const connection = ctx.get("connection");
-    if (!connection) return;
+    const connection = scope.get("connection");
+    if (!connection?.rpc?.handle) return;
     try {
-      if (!ctx.get("webServer")) return;
+      if (!scope.get("webServer")) return;
     } catch {
       return;
     }
     holding = true;
-    let active = true;
     let dispose;
     try {
-      dispose = connection.rpc.handle(
-        "/rpc",
-        async (endpoint, payload) => {
-          try {
-            const value = await handleEndpoint(endpoint, payload, {
-              ctx,
-              cfg,
-              stores,
-              status,
-              live,
-              modes,
-              dataDir: dataDir ?? resolveDataDir(cfg),
-              logger,
-              rebuild,
-              embedManager,
-              sessionInfo
-            });
-            return { ok: true, value };
-          } catch (err) {
-            return {
-              ok: false,
-              error: { code: "internal", message: err instanceof Error ? err.message : String(err), details: {} }
-            };
-          }
-        },
-        { authority: "loopback" }
-      );
-    } catch {
+      dispose = connection.rpc.handle("/rpc", async (endpoint, payload) => {
+        try {
+          const value = await handleEndpoint(endpoint, payload, {
+            ctx: scope,
+            cfg,
+            stores,
+            status,
+            live,
+            modes,
+            dataDir: dataDir ?? resolveDataDir(cfg),
+            logger,
+            rebuild,
+            embedManager,
+            sessionInfo
+          });
+          return { ok: true, value };
+        } catch (err) {
+          return {
+            ok: false,
+            error: { code: "internal", message: err instanceof Error ? err.message : String(err), details: {} }
+          };
+        }
+      });
+    } catch (err) {
       holding = false;
+      logger.warn?.(`[memory] RPC \u6CE8\u518C\u5931\u8D25\uFF1A${err instanceof Error ? err.message : String(err)}`);
       return;
     }
     registeredImpl = connection;
-    if (!active) {
-      void dispose();
-      return;
-    }
     logger.debug?.("[memory] \u72B6\u6001 RPC \u5DF2\u6CE8\u518C\uFF08/rpc \u2192 dsh-memory/*\uFF09");
     disposers.push(() => {
-      active = false;
       holding = false;
-      void dispose();
+      void dispose?.();
     });
   };
   const release = () => {
     for (const dispose of disposers.splice(0)) dispose();
   };
   const disposers = [];
-  ctx.effect(() => {
-    tryRegister();
-    const off = ctx.on("internal/service", (name, impl) => {
-      if (name !== "connection" && name !== "webServer") return;
-      if (!impl) {
+  ctx.inject(["connection", "webServer"], (scope) => {
+    scope.effect(() => {
+      tryRegister(scope);
+      const off = scope.on("internal/service", (name, impl) => {
+        if (name !== "connection" && name !== "webServer") return;
+        if (!impl) {
+          release();
+          registeredImpl = void 0;
+          logger.debug?.(`[memory] ${name} \u670D\u52A1\u4E0B\u7EBF\uFF0CRPC \u6CE8\u518C\u5DF2\u91CA\u653E\uFF08\u5F85\u6062\u590D\u91CD\u6302\uFF09`);
+          return;
+        }
+        if (name === "connection" && impl !== registeredImpl) {
+          release();
+          registeredImpl = void 0;
+        }
+        tryRegister(scope);
+      });
+      return () => {
+        off();
         release();
-        registeredImpl = void 0;
-        logger.debug?.(`[memory] ${name} \u670D\u52A1\u4E0B\u7EBF\uFF0CRPC \u6CE8\u518C\u5DF2\u91CA\u653E\uFF08\u5F85\u6062\u590D\u91CD\u6302\uFF09`);
-        return;
-      }
-      if (name === "connection" && impl !== registeredImpl) {
-        release();
-        registeredImpl = void 0;
-      }
-      tryRegister();
+      };
     });
-    return () => {
-      off();
-      release();
-    };
   });
 }
 async function buildStats(cfg, stores, status) {

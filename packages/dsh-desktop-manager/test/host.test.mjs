@@ -6,8 +6,9 @@ import { join } from 'node:path'
 
 import { apply, inject, enableArmorSession, matchProfileId, name, settingsFile, normalizeArmorMode } from '../src/index.mjs'
 import { REVERIFY_TOOLS, probeReverify, runReverifyTool, resolveHostPython } from '../src/reverify.mjs'
-import { runPentagiTool, buildSandboxDockerArgs, buildPersistentSandboxCreateArgs, wrapSandboxHostLoopback, SANDBOX_CONTAINER_NAME, flowFilesRestPath, KNOWLEDGE_SEARCH_GQL, SANDBOX_CAP_ADD, formatSpecialistDispatchInput, SPECIALIST_ROLES, generateFlowMarkdown, scraperPublicUrl, buildMultipart, jsonSafe, extractAssistantResult, extractAdviserAdvice, extractSpecialistResult, resolveKnowledgeIds, unwrapDuckDuckGoHref } from '../src/pentagi.mjs'
-import { applyLlmToEnvText, pickHarnessLlm } from '../src/pentagi-providers.mjs'
+import { runPentagiTool, buildSandboxDockerArgs, buildPersistentSandboxCreateArgs, wrapSandboxHostLoopback, SANDBOX_CONTAINER_NAME, flowFilesRestPath, KNOWLEDGE_SEARCH_GQL, SANDBOX_CAP_ADD, formatSpecialistDispatchInput, SPECIALIST_ROLES, generateFlowMarkdown, scraperPublicUrl, buildMultipart, jsonSafe, extractAssistantResult, extractAdviserAdvice, extractSpecialistResult, resolveKnowledgeIds, unwrapDuckDuckGoHref, sandboxHostPath } from '../src/pentagi.mjs'
+import { applyLlmToEnvText, pickHarnessLlm, listHarnessLlmProviders } from '../src/pentagi-providers.mjs'
+import { parseCredentialsYaml } from '../src/pentagi-credentials.mjs'
 import { pentestImage, whichDocker, pentagiSandboxEnabled, pentagiDindEnabled, pentagiComposeEnv, dockerHost } from '../src/pentagi-runtime.mjs'
 
 /** 把 DSH_HOME 指到临时目录，避免测到仓库根 / 安装包里的桌面设置。 */
@@ -41,7 +42,12 @@ function withInject(ctx) {
   return {
     ...ctx,
     inject(names, fn) {
-      if (names.includes('webServer') && ctx.webServer !== undefined) fn(ctx)
+      const ready = names.every((name) => {
+        if (name === 'webServer') return ctx.webServer !== undefined
+        if (name === 'web') return ctx.web !== undefined
+        return ctx[name] !== undefined
+      })
+      if (ready) fn(ctx)
       return () => {}
     },
   }
@@ -91,8 +97,12 @@ test('matchProfileId routes model names to ColdBrew profiles', () => {
   assert.equal(matchProfileId('deepseek-v4-flash'), 'deepseek')
   assert.equal(matchProfileId('deepseek-v4-pro'), 'deepseek')
   assert.equal(matchProfileId('grok-4.6'), 'grok')
+  assert.equal(matchProfileId('xai-grok'), 'grok')
   assert.equal(matchProfileId('claude-sonnet-4'), 'claude')
+  assert.equal(matchProfileId('anthropic/claude-opus'), 'claude')
+  assert.equal(matchProfileId('sonnet-4.5'), 'claude')
   assert.equal(matchProfileId('gpt-5.6'), 'codex')
+  assert.equal(matchProfileId('openai/gpt-5.6'), 'codex')
   assert.equal(matchProfileId('codex-1'), 'codex')
   assert.equal(matchProfileId('o3-mini'), 'codex')
   assert.equal(matchProfileId('glm-5.3'), 'glm')
@@ -562,7 +572,7 @@ test('coldbrew default toggle persists under DSH_HOME after the install tree is 
       tools: { register() { return () => {} } },
       webServer: { register() {} },
     }
-    apply(readCtx)
+    apply(withInject(readCtx))
     const provider = sections[0].text
     const agent = {
       id: 'session-after-upgrade',
@@ -703,6 +713,87 @@ test('specialist dispatch input names the official tool and stays English', () =
   assert.match(text, /official `pentester` tool/)
   assert.match(text, /useAgents is enabled/)
   assert.match(text, /Print nmap version only/)
+})
+
+test('sandboxHostPath maps Kali /work and /tmp onto $DSH_HOME/pentagi', () => {
+  const isolated = isolateHome()
+  try {
+    const env = { DSH_HOME: isolated.home }
+    assert.equal(sandboxHostPath('/work', env), join(isolated.home, 'pentagi', 'sandbox-work'))
+    assert.equal(sandboxHostPath('/work/report.md', env), join(isolated.home, 'pentagi', 'sandbox-work', 'report.md'))
+    assert.equal(sandboxHostPath('/tmp/cookie', env), join(isolated.home, 'pentagi', 'sandbox-tmp', 'cookie'))
+  } finally {
+    isolated.restore()
+  }
+})
+
+test('parseCredentialsYaml reads official refs map and flat KEY: value', () => {
+  const nested = parseCredentialsYaml([
+    'version: 1',
+    'refs:',
+    '  GROK2_API_KEY: sk-nested',
+    '  DEEPSEEK3_API_KEY: "sk-quoted"',
+    'records:',
+    '  client-connection/browser-session:',
+    '    kind: grant',
+    '',
+  ].join('\n'))
+  assert.equal(nested.GROK2_API_KEY, 'sk-nested')
+  assert.equal(nested.DEEPSEEK3_API_KEY, 'sk-quoted')
+  assert.equal(nested.VERSION, undefined)
+  const flat = parseCredentialsYaml('GROK2_API_KEY: sk-flat\n')
+  assert.equal(flat.GROK2_API_KEY, 'sk-flat')
+})
+
+const HARNESS_SETTINGS = `agent-default-model:
+  provider: grok2
+  model: grok-4.6
+llm-pi-ai:
+  providers:
+    grok2:
+      displayName: grok2
+      apiKeyEnv: GROK2_API_KEY
+      api: openai-completions
+      baseURL: https://st.wqyhr.com/v1
+      models:
+        - id: grok-4.6
+`
+
+test('listHarnessLlmProviders reads official refs-nested credentials yaml', () => {
+  const isolated = isolateHome()
+  try {
+    writeFileSync(join(isolated.home, 'settings.yaml'), HARNESS_SETTINGS)
+    writeFileSync(join(isolated.home, '.credentials.yaml'), [
+      'version: 1',
+      'refs:',
+      '  GROK2_API_KEY: sk-nested-from-desktop',
+      'records:',
+      '  client-connection/browser-session:',
+      '    kind: grant',
+      '',
+    ].join('\n'))
+    const listed = listHarnessLlmProviders({ DSH_HOME: isolated.home })
+    assert.equal(listed.length, 1)
+    assert.equal(listed[0].id, 'grok2')
+    assert.equal(listed[0].hasKey, true)
+    assert.equal(listed[0].key, 'sk-nested-from-desktop')
+    assert.equal(listed[0].baseURL, 'https://st.wqyhr.com/v1')
+  } finally {
+    isolated.restore()
+  }
+})
+
+test('listHarnessLlmProviders still reads flat KEY: value credentials yaml', () => {
+  const isolated = isolateHome()
+  try {
+    writeFileSync(join(isolated.home, 'settings.yaml'), HARNESS_SETTINGS)
+    writeFileSync(join(isolated.home, '.credentials.yaml'), 'GROK2_API_KEY: sk-flat-legacy\n')
+    const listed = listHarnessLlmProviders({ DSH_HOME: isolated.home })
+    assert.equal(listed.length, 1)
+    assert.equal(listed[0].key, 'sk-flat-legacy')
+  } finally {
+    isolated.restore()
+  }
 })
 
 test('pickHarnessLlm skips an unhealthy pin and uses the next healthy provider', () => {

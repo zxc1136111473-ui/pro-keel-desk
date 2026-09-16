@@ -139,7 +139,7 @@ diff --git a/node_modules/@deepseek-ai/dsh-api-session-controller/lib/index.js b
  	}
  	agentOptions() {
  		const { provider, model } = this.ctx.agentDefaultModel.currentSelection();
-@@ -652,6 +671,32 @@
+@@ -652,6 +671,36 @@
  			throw new RemoteError("gateway/internal", `failed to rename session "${request.sessionId}": ${String(error)}`, {});
  		}
  	}
@@ -149,8 +149,12 @@ diff --git a/node_modules/@deepseek-ai/dsh-api-session-controller/lib/index.js b
 +		try {
 +			state = await this.readSessionState(request.sessionId);
 +		} catch (error) {
-+			if (error instanceof ApiSessionNotFound) throw new RemoteError("session/not-found", error.message, { sessionId: request.sessionId });
-+			throw new RemoteError("gateway/internal", `failed to inspect session "${request.sessionId}" before deletion: ${String(error)}`, {});
++			if (!(error instanceof ApiSessionNotFound)) throw new RemoteError("gateway/internal", `failed to inspect session "${request.sessionId}" before deletion: ${String(error)}`, {});
++			const persistence = this.ctx.get("sessionPersistence");
++			if (persistence !== void 0) await persistence.delete(request.sessionId);
++			await this.ctx.workspaceRegistry.forgetSession(request.sessionId);
++			this.ctx.emit("api-session/removed", request.sessionId);
++			return { deleted: true };
 +		}
 +		const live = this.ctx.agents.get(request.sessionId);
 +		if (hasApiSessionSubagentOwner(this.ctx, { header: state.header }, live)) throw apiSessionSubagentOwnershipError(request.sessionId);
@@ -160,7 +164,7 @@ diff --git a/node_modules/@deepseek-ai/dsh-api-session-controller/lib/index.js b
 +		try {
 +			await this.agents.disposeOwned(request.sessionId);
 +			if (this.ctx.agents.get(request.sessionId) !== void 0 || this.ctx.sessions.get(request.sessionId) !== void 0) throw new RemoteError("session/agent-busy", `session "${request.sessionId}" is still active`, { reason: "the live Agent is owned by another capability" });
-+			if (!await persistence.delete(request.sessionId)) throw new RemoteError("session/not-found", `session "${request.sessionId}" not found`, { sessionId: request.sessionId });
++			await persistence.delete(request.sessionId);
 +			await this.ctx.workspaceRegistry.forgetSession(request.sessionId);
 +			if (!hadLiveSession) this.ctx.emit("api-session/removed", request.sessionId);
 +			return { deleted: true };
@@ -648,7 +652,7 @@ diff --git a/node_modules/@deepseek-ai/dsh-api-session-controller/lib/types/comm
 diff --git a/node_modules/@deepseek-ai/dsh-api-session-controller/lib/types/commands.js b/node_modules/@deepseek-ai/dsh-api-session-controller/lib/types/commands.js
 --- a/node_modules/@deepseek-ai/dsh-api-session-controller/lib/types/commands.js
 +++ b/node_modules/@deepseek-ai/dsh-api-session-controller/lib/types/commands.js
-@@ -179,6 +179,47 @@
+@@ -179,6 +179,50 @@
              throw new RemoteError('gateway/internal', `failed to rename session "${request.sessionId}": ${String(error)}`, {});
          }
      }
@@ -659,10 +663,15 @@ diff --git a/node_modules/@deepseek-ai/dsh-api-session-controller/lib/types/comm
 +            state = await this.readSessionState(request.sessionId);
 +        }
 +        catch (error) {
-+            if (error instanceof ApiSessionNotFound) {
-+                throw new RemoteError('session/not-found', error.message, { sessionId: request.sessionId });
++            if (!(error instanceof ApiSessionNotFound)) {
++                throw new RemoteError('gateway/internal', `failed to inspect session "${request.sessionId}" before deletion: ${String(error)}`, {});
 +            }
-+            throw new RemoteError('gateway/internal', `failed to inspect session "${request.sessionId}" before deletion: ${String(error)}`, {});
++            const persistence = this.ctx.get('sessionPersistence');
++            if (persistence !== undefined)
++                await persistence.delete(request.sessionId);
++            await this.ctx.workspaceRegistry.forgetSession(request.sessionId);
++            this.ctx.emit('api-session/removed', request.sessionId);
++            return { deleted: true };
 +        }
 +        const live = this.ctx.agents.get(request.sessionId);
 +        if (hasApiSessionSubagentOwner(this.ctx, { header: state.header }, live)) {
@@ -679,9 +688,7 @@ diff --git a/node_modules/@deepseek-ai/dsh-api-session-controller/lib/types/comm
 +                || this.ctx.sessions.get(request.sessionId) !== undefined) {
 +                throw new RemoteError('session/agent-busy', `session "${request.sessionId}" is still active`, { reason: 'the live Agent is owned by another capability' });
 +            }
-+            if (!(await persistence.delete(request.sessionId))) {
-+                throw new RemoteError('session/not-found', `session "${request.sessionId}" not found`, { sessionId: request.sessionId });
-+            }
++            await persistence.delete(request.sessionId);
 +            await this.ctx.workspaceRegistry.forgetSession(request.sessionId);
 +            if (!hadLiveSession)
 +                this.ctx.emit('api-session/removed', request.sessionId);

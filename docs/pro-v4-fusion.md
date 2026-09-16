@@ -51,11 +51,22 @@ npm run dsh -- --help
 npm run dsh -- tui
 npm run dsh -- web --no-open
 npm run dsh -- plugin --profile web ls
+npm run dsh -- plugin --profile web add dsh-layered-memory
 npm run dsh -- --profile headless "summarise this repo"
 ```
 
 `scripts/dsh.mjs` creates `~/.dsh/profiles/tui` on first TUI boot. Official
-`0.1.5-rc.2` has no `tui` command; the wrapper rewrites it to `--profile tui`.
+`0.1.5-rc.2` has no `tui` command; the wrapper rewrites it to `--profile tui`
+and injects `build/dsh-fused-cli.patch.yml` (manager + memory + retry +
+quick-commands + open-external + infinite-gen-1 + DuckDuckGo search).
+
+Packaged apps ship the same wrapper as `Contents/Resources/dsh.mjs` (macOS)
+or `resources/dsh.mjs` (Windows):
+
+```bash
+node "/Applications/DSH Desktop.app/Contents/Resources/dsh.mjs" tui
+node "/Applications/DSH Desktop.app/Contents/Resources/dsh.mjs" plugin --profile web ls
+```
 
 ## Build plugins
 
@@ -71,11 +82,15 @@ packages and the `dsh` patch-package injection land in `node_modules`.
 - Desktop shell remains Electron, not Tauri.
 - Harness is the pinned npm graph, not pro-v4's vendored `harness/` (newer TUI
   source + older 0.1.5-rc.2 peers — TUI boot may need a later harness bump).
-- Infinite-gen-1 install/uninstall in the manager UI now looks under
-  `packages/dsh-infinite-gen-1`, not Tauri's `plugins/`.
+- Infinite-gen-1 install in the manager UI prefers the bundled
+  `packages/dsh-infinite-gen-1` (or copies it to `$DSH_HOME/plugins/`), and
+  only clones GitHub if the app bundle has no copy.
 - `dsh-open-external` still prefers Tauri opener IPC, then `window.open` /
   `postMessage` (Electron path).
 - Safe Mode overlay is unchanged: fused plugins stay off during recovery.
+- PentAGI reads official `$DSH_HOME/.credentials.yaml` `refs:` maps (and
+  legacy flat KEY: value), maps Kali `/work` `/tmp` onto
+  `$DSH_HOME/pentagi/sandbox-*`, and retries GraphQL after minting a token.
 
 ## Run the desktop app
 
@@ -101,3 +116,15 @@ Artifacts:
 - `dist/mac-arm64/DSH Desktop.app`
 
 Installed to `/Applications/DSH Desktop.app` (does not replace Tauri `DeepSeek Harness.app`). First launch may need System Settings → Privacy & Security → Open Anyway.
+
+## Packaged install (Windows x64)
+
+From this Mac tree (unsigned NSIS; needs Wine for the installer):
+
+```bash
+CSC_IDENTITY_AUTO_DISCOVERY=false npm run package:win
+```
+
+Artifact:
+
+- `dist/dsh-desktop-windows-x64-setup.exe`

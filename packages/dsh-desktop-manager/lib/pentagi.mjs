@@ -1166,6 +1166,24 @@ function searchBucket(bucket, questions, extraFilter) {
     .map(row => row.item)
 }
 
+export function sandboxHostPath(containerPath, env = process.env) {
+  const raw = String(containerPath ?? '').trim()
+  const workHost = join(userHome(env), 'pentagi', 'sandbox-work')
+  const tmpHost = join(userHome(env), 'pentagi', 'sandbox-tmp')
+  if (raw === '/work' || raw.startsWith('/work/')) {
+    const rest = raw.slice('/work'.length).replace(/^\/+/, '')
+    return rest ? join(workHost, rest) : workHost
+  }
+  if (raw === '/tmp' || raw.startsWith('/tmp/')) {
+    const rest = raw.slice('/tmp'.length).replace(/^\/+/, '')
+    return rest ? join(tmpHost, rest) : tmpHost
+  }
+  if (raw.startsWith('sandbox-work/') || raw === 'sandbox-work') {
+    return join(userHome(env), 'pentagi', raw)
+  }
+  return resolve(raw)
+}
+
 export function unwrapDuckDuckGoHref(href) {
   try {
     const absolute = href.startsWith('//') ? `https:${href}` : href
@@ -1176,24 +1194,43 @@ export function unwrapDuckDuckGoHref(href) {
   return href
 }
 
-async function duckduckgo(query, maxResults = 5) {
-  const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`
-  const page = await httpGet(url)
-  if (!page.ok) return { ok: false, error: `duckduckgo HTTP ${page.status}`, status: page.status }
+function parseDuckDuckGoResults(html, pageUrl, maxResults) {
   const results = []
   const re = /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi
   let match
-  while ((match = re.exec(page.text)) !== null && results.length < maxResults) {
+  while ((match = re.exec(html)) !== null && results.length < maxResults) {
     results.push({ href: unwrapDuckDuckGoHref(match[1]), title: htmlToText(match[2]) })
   }
   if (results.length === 0) {
-    for (const link of extractLinks(page.text, url)) {
+    for (const link of extractLinks(html, pageUrl)) {
       if (results.length >= maxResults) break
       if (!link.href.includes('duckduckgo.com')) results.push({ href: unwrapDuckDuckGoHref(link.href), title: link.title || link.href })
     }
   }
-  const snippet = results.map(item => `${item.title} ${item.href}`).join('\n').slice(0, 1500)
-  return { ok: true, engine: 'duckduckgo', query, results, snippet }
+  return results
+}
+
+export async function duckduckgo(query, maxResults = 5) {
+  const urls = [
+    `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
+    `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`,
+  ]
+  let last = { ok: false, error: 'duckduckgo empty', query }
+  for (const url of urls) {
+    const page = await httpGet(url)
+    if (!page.ok) {
+      last = { ok: false, error: `duckduckgo HTTP ${page.status}`, status: page.status, query, engine: url }
+      continue
+    }
+    const results = parseDuckDuckGoResults(page.text, url, maxResults)
+    if (results.length === 0) {
+      last = { ok: true, engine: url, query, results: [], snippet: htmlToText(page.text).slice(0, 800) }
+      continue
+    }
+    const snippet = results.map(item => `${item.title} ${item.href}`).join('\n').slice(0, 1500)
+    return { ok: true, engine: 'duckduckgo', query, results, snippet }
+  }
+  return last
 }
 
 async function sploitus(query, maxResults = 10, exploitType = 'exploits') {
@@ -1992,26 +2029,27 @@ async function executePentagiTool(name, args = {}, env = process.env) {
     case 'pg_terminal':
       return runTerminal(a, env)
     case 'pg_file': {
-      const filePath = resolve(String(a.path ?? ''))
+      const requested = String(a.path ?? '')
+      const filePath = sandboxHostPath(requested, env)
       if (a.action === 'read_file') {
-        if (!existsSync(filePath)) return { ok: false, error: `missing ${filePath}` }
+        if (!existsSync(filePath)) return { ok: false, error: `missing ${filePath}`, requested, mapped: filePath }
         const content = readFileSync(filePath, 'utf8')
-        return { ok: true, path: filePath, bytes: content.length, content: content.slice(0, 200_000) }
+        return { ok: true, path: filePath, requested, bytes: content.length, content: content.slice(0, 200_000) }
       }
       if (a.action === 'write_file') {
         mkdirSync(dirname(filePath), { recursive: true })
         writeFileSync(filePath, String(a.content ?? ''))
-        return { ok: true, path: filePath, bytes: String(a.content ?? '').length, action: 'write_file' }
+        return { ok: true, path: filePath, requested, bytes: String(a.content ?? '').length, action: 'write_file' }
       }
       if (a.action === 'edit_file') {
-        if (!existsSync(filePath)) return { ok: false, error: `missing ${filePath}` }
+        if (!existsSync(filePath)) return { ok: false, error: `missing ${filePath}`, requested, mapped: filePath }
         const original = readFileSync(filePath, 'utf8')
         try {
           const next = applyEdit(original, a.diff)
           writeFileSync(filePath, next)
-          return { ok: true, path: filePath, action: 'edit_file', bytes: next.length }
+          return { ok: true, path: filePath, requested, action: 'edit_file', bytes: next.length }
         } catch (error) {
-          return { ok: false, error: String(error.message) }
+          return { ok: false, error: String(error.message), requested, mapped: filePath }
         }
       }
       return { ok: false, error: 'action must be read_file|write_file|edit_file' }

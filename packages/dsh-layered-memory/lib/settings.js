@@ -37,8 +37,8 @@ function validateDistillChain(chain, opts) {
 const NS = "dsh-memory";
 const ALWAYS_ON = {
   enabled: true,
-  capture: false,
-  distill: false,
+  capture: true,
+  distill: true,
   recall: true,
   reasoningEffort: "",
   distillProvider: "",
@@ -60,8 +60,8 @@ function liveSettingsSchema() {
   });
   return Schema.object({
     enabled: Schema.boolean().default(true),
-    capture: Schema.boolean().default(false),
-    distill: Schema.boolean().default(false),
+    capture: Schema.boolean().default(true),
+    distill: Schema.boolean().default(true),
     recall: Schema.boolean().default(true),
     reasoningEffort: Schema.union([...EFFORT_CHOICES]).default(""),
     distillProvider: Schema.string().default(""),

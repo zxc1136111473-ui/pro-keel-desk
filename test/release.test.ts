@@ -84,8 +84,9 @@ describe('GitHub release contract', () => {
     // `@deepseek-ai/dsh-*` dep is pinned to one exact version and every
     // resolution carries an integrity hash — `npm ci` stays reproducible
     // without vendoring tarballs into the repository.
+    const fusedLocalHarnessPackages = new Set(['@deepseek-ai/dsh-tui'])
     const harnessDeps = Object.entries(packageJson.dependencies).filter(
-      ([name]) => name.startsWith('@deepseek-ai/dsh')
+      ([name]) => name.startsWith('@deepseek-ai/dsh') && !fusedLocalHarnessPackages.has(name)
     )
     expect(harnessDeps.length).toBeGreaterThan(200)
     for (const [name, range] of harnessDeps) {
@@ -94,6 +95,7 @@ describe('GitHub release contract', () => {
       expect(entry?.resolved, name).toMatch(/^https?:\/\//)
       expect(entry?.integrity, name).toMatch(/^sha\d+-/)
     }
+    expect(packageJson.dependencies['@deepseek-ai/dsh-tui']).toMatch(/^file:packages\//)
 
     // The vendored-tarball layout is gone; nothing may resolve from it.
     expect(packageLockRaw).not.toMatch(/file:packages\/harness-/)
@@ -204,6 +206,14 @@ describe('GitHub release contract', () => {
     expect(packageJson.build.extraResources).toContainEqual({
       from: 'build/dsh-desktop-safe.patch.yml',
       to: 'dsh-desktop-safe.patch.yml'
+    })
+    expect(packageJson.build.extraResources).toContainEqual({
+      from: 'build/dsh-fused-cli.patch.yml',
+      to: 'dsh-fused-cli.patch.yml'
+    })
+    expect(packageJson.build.extraResources).toContainEqual({
+      from: 'scripts/dsh.mjs',
+      to: 'dsh.mjs'
     })
     expect(packageJson.build.extraResources).toContainEqual({
       from: 'build/web-import.html',

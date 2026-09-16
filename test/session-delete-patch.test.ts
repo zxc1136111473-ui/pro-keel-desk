@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, rename, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -20,7 +20,7 @@ const patchedPackages = [
     name: 'dsh-session-persistence-jsonl',
     version: '0.1.5-rc.2',
     file: 'lib/index.js',
-    markers: ['async delete(id, options)', 'this.tracker.claimWrite(id)', 'this.coldLogMemo.delete(id)']
+    markers: ['async delete(id, options)', 'this.tracker.claimWrite(id)', 'this.coldLogMemo.delete(id)', 'every stored generation']
   },
   {
     name: 'dsh-workspace',
@@ -113,6 +113,38 @@ describe('permanent session deletion dependency patches', () => {
       // A second delete of the same id is a no-op, not a failure.
       expect(await persistence.delete(removed)).toBe(false)
       expect(await persistence.delete(SessionId('desktop-delete-missing'))).toBe(false)
+    } finally {
+      await fiber.dispose()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('deletes a historical generation even when the current-format filename is absent', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'dsh-desktop-session-delete-v0-'))
+    const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    const fiber = await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
+    const persistence = ctx.sessionPersistence as typeof ctx.sessionPersistence & {
+      delete(id: ReturnType<typeof SessionId>): Promise<boolean>
+    }
+    const historical = SessionId('desktop-delete-historical')
+    const event = [{ type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } }] as const
+    const handle = await persistence.create({ version: SESSION_FORMAT_VERSION, id: historical, createdAt: 1, isSeeded: false })
+    try {
+      await handle.append(event)
+      await handle.flush()
+    } finally {
+      await handle.close()
+    }
+
+    try {
+      const sessionDir = path.join(root, '_no-cwd', historical)
+      await rename(path.join(sessionDir, `session.v${SESSION_FORMAT_VERSION}.jsonl`), path.join(sessionDir, 'session.jsonl'))
+      expect(await readdir(sessionDir)).toEqual(expect.arrayContaining(['session.jsonl']))
+
+      expect(await persistence.delete(historical)).toBe(true)
+      expect(await readdir(sessionDir)).not.toContain('session.jsonl')
+      expect(await persistence.stat(historical)).toBeUndefined()
     } finally {
       await fiber.dispose()
       await rm(root, { recursive: true, force: true })

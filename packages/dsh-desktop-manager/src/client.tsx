@@ -1,5 +1,21 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useSyncExternalStore } from 'react'
 import { Button, IconCopyOutline16, StateDot, TerminalBlock, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
+import styles from './client.css'
+
+const TERMINAL_LABELS = {
+  signal: (signal: string) => `信号 ${signal}`,
+  exitCode: (exitCode: number) => `退出 ${exitCode}`,
+  running: '运行中',
+  failed: '失败',
+  done: '完成',
+  copy: '复制',
+  copied: '已复制',
+  noOutput: '暂无输出',
+  collapseAria: '收起日志',
+  collapse: '收起',
+  expandAria: (hidden: number) => `展开其余 ${hidden} 行`,
+  expand: (hidden: number) => `展开 ${hidden} 行`,
+}
 
 /** 0.1.5-rc.2 deleted `@deepseek-ai/dsh-client-runtime`; keep a local shape. */
 type ClientContext = {
@@ -8,7 +24,6 @@ type ClientContext = {
   modelDirectories?: { directoryFor: (sessionId: string) => { store: unknown } }
   effect: Function
 }
-import styles from './client.css'
 
 const NS = 'desktop-manager'
 const STYLE_MARKER = 'data-dsh-desktop-manager-styles'
@@ -44,16 +59,34 @@ export const inject = ['slots', 'locale', 'connection', 'modelDirectories']
 function matchProfileId(modelName: string | null | undefined): string {
   const name = String(modelName ?? '').toLowerCase()
   const rules: Record<string, string[]> = {
-    codex: ['gpt', 'codex', 'o1', 'o3'],
-    claude: ['claude'],
-    grok: ['grok'],
+    grok: ['grok', 'xai'],
+    claude: ['claude', 'anthropic', 'sonnet', 'opus', 'haiku'],
     glm: ['glm', 'chatglm', 'zhipu'],
+    codex: ['gpt', 'codex', 'o1', 'o3', 'openai'],
     deepseek: ['deepseek'],
   }
   for (const [id, patterns] of Object.entries(rules)) {
     if (patterns.some(pattern => name.includes(pattern))) return id
   }
   return 'deepseek'
+}
+
+function sessionIdOf(zone: unknown): string {
+  if (typeof zone === 'string') return zone
+  if (!zone || typeof zone !== 'object') return ''
+  const record = zone as { session?: { sessionId?: string }; sessionId?: string }
+  return record.session?.sessionId || record.sessionId || ''
+}
+
+function selectionLabel(current: { provider?: string; model?: string } | null | undefined, groups?: readonly { id?: string; name?: string; models?: readonly { id?: string; name?: string }[] }[]): string {
+  const model = String(current?.model ?? '').trim()
+  const provider = String(current?.provider ?? '').trim()
+  if (groups) {
+    const group = groups.find(item => item.id === provider)
+    const named = group?.models?.find(item => item.id === model)?.name
+    if (named) return `${named} ${model} ${provider} ${group?.name ?? ''}`
+  }
+  return `${model} ${provider}`
 }
 
 const PROFILE_LABELS: Record<string, string> = {
@@ -81,13 +114,22 @@ const PROFILE_MATCH_HINTS: Record<string, string> = {
 
 interface ColdBrewToggleInjected {
   /** 该会话的模型目录 store；可能为 null（服务不可用/会话未就绪）。 */
-  directory: { getSnapshot(): { current?: { model?: string } | null } | null; subscribe(fn: () => void): () => void } | null
+  directory: {
+    getSnapshot(): {
+      current?: { provider?: string; model?: string } | null
+      groups?: readonly { id?: string; name?: string; models?: readonly { id?: string; name?: string }[] }[]
+      status?: string
+    } | null
+    subscribe(fn: () => void): () => void
+  } | null
+  loadDirectory?: () => void
 }
 
 type ColdBrewToggleProps = ColdBrewToggleInjected & {
   sessionId: string
   /** InputZone owner share 里的会话快照（含 blank 位）。 */
   session: { blank?: boolean } | null
+  useSession?: () => { blank?: boolean; sessionId?: string } | null
   input?: { draft?: string }
   inputActions?: { setDraft(text: string): void }
 }
@@ -114,19 +156,32 @@ function modeLabel(mode: string): string {
   return mode === 'reverify' ? 'Reverify' : mode === 'pentagi' ? 'PentAGI' : '冷咖啡'
 }
 
-function ColdBrewToggle({ sessionId, session, directory, input, inputActions }: ColdBrewToggleProps) {
+function ColdBrewToggle({ sessionId, session, useSession, directory, loadDirectory, input, inputActions }: ColdBrewToggleProps) {
   const [enabled, setEnabled] = useState<boolean | null>(null)
-  const [mode, setMode] = useState<string>('coldbrew')
+  const [mode, setMode] = useState<string>('pentagi')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [notice, setNotice] = useState<{ text: string; ok: boolean } | null>(null)
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const newSession = session?.blank === true
+  const sessionSnap = useSession?.() ?? session
+  const newSession = sessionSnap == null || sessionSnap.blank !== false
+  const snapshot = useSyncExternalStore(
+    (fn) => directory?.subscribe?.(fn) ?? (() => {}),
+    () => directory?.getSnapshot?.() ?? null,
+    () => null,
+  )
 
-  const model = directory?.getSnapshot()?.current?.model ?? ''
+  useEffect(() => {
+    loadDirectory?.()
+    const timer = setInterval(() => loadDirectory?.(), snapshot?.current?.model ? 4_000 : 400)
+    return () => clearInterval(timer)
+  }, [loadDirectory, sessionId, snapshot?.current?.model])
+
+  const current = snapshot?.current ?? null
+  const model = selectionLabel(current, snapshot?.groups)
   const profileId = matchProfileId(model)
-  const profileLabel = PROFILE_LABELS[profileId] ?? profileId
+  const profileLabel = (current?.model || current?.provider) ? (PROFILE_LABELS[profileId] ?? profileId) : ''
   const wakePhrase = wakePhraseFor(profileId, mode)
 
   // 挂载时读取该会话已持久化的开关状态。新会话没有记录，后端会按
@@ -135,7 +190,8 @@ function ColdBrewToggle({ sessionId, session, directory, input, inputActions }: 
     let alive = true
     const pull = () => {
       const params = new URLSearchParams()
-      if (model) params.set('model', model)
+      if (current?.model) params.set('model', current.model)
+      if (current?.provider) params.set('provider', current.provider)
       if (newSession) params.set('blank', '1')
       const query = params.toString() ? `?${params}` : ''
       fetch(`/api/coldbrew/session/${encodeURIComponent(sessionId)}${query}`)
@@ -143,15 +199,15 @@ function ColdBrewToggle({ sessionId, session, directory, input, inputActions }: 
         .then(data => {
           if (!alive) return
           setEnabled(data.enabled === true)
-          setMode((data.mode === 'reverify' || data.mode === 'pentagi') ? data.mode : 'coldbrew')
+          if (data.mode === 'reverify' || data.mode === 'pentagi' || data.mode === 'coldbrew') setMode(data.mode)
         })
-        .catch(() => { if (alive) setEnabled(false) })
+        .catch(() => { /* keep last known mode */ })
     }
     pull()
     if (!newSession) return () => { alive = false }
     const timer = setInterval(pull, 1500)
     return () => { alive = false; clearInterval(timer) }
-  }, [sessionId, model, newSession])
+  }, [sessionId, current?.model, current?.provider, newSession])
 
   const toggle = async (next: boolean) => {
     if (!newSession || busy) return
@@ -161,7 +217,7 @@ function ColdBrewToggle({ sessionId, session, directory, input, inputActions }: 
       const res = await fetch(`/api/coldbrew/session/${encodeURIComponent(sessionId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: next, model }),
+        body: JSON.stringify({ enabled: next, model, mode }),
       })
       if (!res.ok) throw new Error(await res.text())
       const data = await res.json()
@@ -271,7 +327,7 @@ function ColdBrewToggle({ sessionId, session, directory, input, inputActions }: 
           {modeLabel(mode)}
           <IconCopyOutline16 size={12} />
         </button>
-        {on && ` · ${profileLabel}`}
+        {on && profileLabel ? ` · ${profileLabel}` : ''}
       </span>
       {error !== null && <span className="dsm-toggle-error" title={error}>!</span>}
     </div>
@@ -1180,6 +1236,7 @@ function PentagiSection() {
             command="PentAGI 后端"
             output={logs.length > 0 ? logs.join('\n') : '等待任务开始…'}
             running={busy}
+            labels={TERMINAL_LABELS}
           />
         </section>
       )}
@@ -1348,25 +1405,33 @@ function ManagerSection() {
   const action = async (type: string) => {
     console.log(`[dsh-desktop-manager] Action: ${type}`)
     if (type === 'restart') {
+      const desktop = (window as unknown as { dshDesktop?: { restartHarness?: () => Promise<unknown> } }).dshDesktop
+      if (typeof desktop?.restartHarness === 'function') {
+        await desktop.restartHarness()
+        return
+      }
       window.parent.postMessage({ type: 'deepseek-harness:restart' }, '*')
       return
     }
     setBusy(true)
     setLogs([])
+    startPolling()
     try {
       const res = await fetch(`/api/desktop-manager/${type}`, { method: 'POST' })
-      if (!res.ok) {
-        throw new Error(await res.text())
-      }
-      if (type === 'install' || type === 'uninstall') {
-        startPolling()
-      } else {
-        showToast('设置已更新，点击下方按钮应用')
-        await refresh()
-        setBusy(false)
-      }
+      const bodyText = await res.text()
+      let payload: { logs?: string[]; error?: string } = {}
+      try { payload = JSON.parse(bodyText) } catch { payload = { error: bodyText } }
+      if (Array.isArray(payload.logs) && payload.logs.length > 0) setLogs(payload.logs)
+      if (!res.ok) throw new Error(payload.error || bodyText || `HTTP ${res.status}`)
+      showToast(type === 'install' ? '冷咖啡 Zero 已就绪' : type === 'uninstall' ? '已停用冷咖啡 Zero' : '设置已更新')
+      await refresh()
     } catch (error: any) {
       showToast(`操作失败: ${error.message}`)
+    } finally {
+      if (pollTimer.current) {
+        clearInterval(pollTimer.current)
+        pollTimer.current = null
+      }
       setBusy(false)
     }
   }
@@ -1563,6 +1628,7 @@ function ManagerSection() {
             command="桌面管理任务"
             output={logs.length > 0 ? logs.join('\n') : '等待任务开始…'}
             running={busy}
+            labels={TERMINAL_LABELS}
           />
         </section>
       )}
@@ -1587,6 +1653,7 @@ export function apply(ctx: ClientContext) {
     order: 100,
     label: () => t('nav'),
     locale: NS,
+    inject: () => ({}),
   }, ManagerSection))
 
   ctx.slots.inject('settings.section', () => ctx.slots.register({
@@ -1595,23 +1662,28 @@ export function apply(ctx: ClientContext) {
     order: 110,
     label: () => t('pentagiNav'),
     locale: NS,
+    inject: () => ({}),
   }, PentagiSection))
 
-  // 输入框内的冷咖啡破甲开关：conversation.input.left 是会话作用域 list 槽位，
-  // owner share 提供 session/input 快照，inject 回调按会话注入模型目录 store。
-  // 需要 modelDirectories 服务解析当前会话的模型选择；会话尚未就绪时容错为 null。
+  // 输入框内的冷咖啡破甲开关：conversation.input.left 是会话作用域 list 槽位。
+  // 官方 runInject 传入 binding.key（裸 sessionId），与 conversation.input.model 相同。
+  // 不要回写 sessionId/session，否则会盖掉 kit 里的会话快照。
   ctx.slots.inject('conversation.input.left', () => ctx.slots.register({
     name: 'conversation.input.left',
     id: 'coldbrew-toggle',
     order: 10,
     locale: NS,
     inject: (sessionId: string): ColdBrewToggleInjected => {
+      const id = sessionIdOf(sessionId)
       try {
-        const directory = ctx.modelDirectories?.directoryFor(sessionId)
-        if (directory === undefined) return { directory: null }
-        return { directory: directory.store }
+        if (!id) return { directory: null, loadDirectory: () => {} }
+        const directory = ctx.modelDirectories?.directoryFor(id)
+        if (directory === undefined) return { directory: null, loadDirectory: () => {} }
+        const loadDirectory = () => { directory.load?.().catch(() => {}) }
+        loadDirectory()
+        return { directory: directory.store, loadDirectory }
       } catch {
-        return { directory: null }
+        return { directory: null, loadDirectory: () => {} }
       }
     },
   }, ColdBrewToggle))

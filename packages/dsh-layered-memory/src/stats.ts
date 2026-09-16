@@ -129,65 +129,53 @@ export function registerMemoryRpc(
   /** 当前 handle 绑定的 connection 实例（internal/service 第二参；用于识别实例替换）。 */
   let registeredImpl: unknown;
 
-  const tryRegister = (): void => {
+  const tryRegister = (scope: Context): void => {
     if (holding) return;
-    const connection = ctx.get('connection');
-    if (!connection) return;
-    // connection.rpc.handle mounts on the caller fiber's webServer. Accessing
-    // ctx.webServer without inject throws and takes the whole Host down.
+    const connection = scope.get('connection');
+    if (!connection?.rpc?.handle) return;
+    // handle() mounts on the caller fiber's webServer. Accessing
+    // scope.webServer without inject throws and takes the whole Host down.
     try {
-      if (!ctx.get('webServer')) return;
+      if (!scope.get('webServer')) return;
     } catch {
       return;
     }
     holding = true;
-    let active = true;
-    // handle() 同步注册并返回异步 disposer（() => Promise<void>）。
-    // Desktop / DSH 0.1.0-rc.5 的 handle 第三参是强制的 trust policy。
-    // 桌面壳只走回环，用 loopback；LAN 部署可在 overlay 里改 trusted-host。
     let dispose: (() => Promise<void>) | void;
     try {
-      dispose = connection.rpc.handle(
-        '/rpc',
-        async (endpoint, payload) => {
-          try {
-            const value = await handleEndpoint(endpoint, payload, {
-              ctx,
-              cfg,
-              stores,
-              status,
-              live,
-              modes,
-              dataDir: dataDir ?? resolveDataDir(cfg),
-              logger,
-              rebuild,
-              embedManager,
-              sessionInfo,
-            });
-            return { ok: true, value };
-          } catch (err) {
-            return {
-              ok: false,
-              error: { code: 'internal', message: err instanceof Error ? err.message : String(err), details: {} },
-            };
-          }
-        },
-        { authority: 'loopback' },
-      );
-    } catch {
+      dispose = connection.rpc.handle('/rpc', async (endpoint, payload) => {
+        try {
+          const value = await handleEndpoint(endpoint, payload, {
+            ctx: scope,
+            cfg,
+            stores,
+            status,
+            live,
+            modes,
+            dataDir: dataDir ?? resolveDataDir(cfg),
+            logger,
+            rebuild,
+            embedManager,
+            sessionInfo,
+          });
+          return { ok: true, value };
+        } catch (err) {
+          return {
+            ok: false,
+            error: { code: 'internal', message: err instanceof Error ? err.message : String(err), details: {} },
+          };
+        }
+      });
+    } catch (err) {
       holding = false;
+      logger.warn?.(`[memory] RPC 注册失败：${err instanceof Error ? err.message : String(err)}`);
       return;
     }
     registeredImpl = connection;
-    if (!active) {
-      void dispose();
-      return;
-    }
     logger.debug?.('[memory] 状态 RPC 已注册（/rpc → dsh-memory/*）');
     disposers.push(() => {
-      active = false;
       holding = false;
-      void dispose();
+      void dispose?.();
     });
   };
 
@@ -198,29 +186,28 @@ export function registerMemoryRpc(
 
   const disposers: Array<() => void> = [];
 
-  ctx.effect(() => {
-    tryRegister();
-    const off = ctx.on('internal/service', (name: string, impl: unknown) => {
-      if (name !== 'connection' && name !== 'webServer') return;
-      if (!impl) {
-        // 服务下线：旧 handle 已随旧服务实例失效——主动释放并复位，
-        // 服务恢复时本事件再触发即可重挂（否则 holding 恒真 → RPC 永久失联）
+  ctx.inject(['connection', 'webServer'], (scope) => {
+    scope.effect(() => {
+      tryRegister(scope);
+      const off = scope.on('internal/service', (name: string, impl: unknown) => {
+        if (name !== 'connection' && name !== 'webServer') return;
+        if (!impl) {
+          release();
+          registeredImpl = undefined;
+          logger.debug?.(`[memory] ${name} 服务下线，RPC 注册已释放（待恢复重挂）`);
+          return;
+        }
+        if (name === 'connection' && impl !== registeredImpl) {
+          release();
+          registeredImpl = undefined;
+        }
+        tryRegister(scope);
+      });
+      return () => {
+        off();
         release();
-        registeredImpl = undefined;
-        logger.debug?.(`[memory] ${name} 服务下线，RPC 注册已释放（待恢复重挂）`);
-        return;
-      }
-      if (name === 'connection' && impl !== registeredImpl) {
-        // 实例替换：旧 handle 失效，换新实例重挂
-        release();
-        registeredImpl = undefined;
-      }
-      tryRegister();
+      };
     });
-    return () => {
-      off();
-      release();
-    };
   });
 }
 

@@ -1,5 +1,8 @@
 # CLI/TUI overlay fused from pro-v4. Host HTTP routes wait for webServer, so
 # this layer is safe on headless and tui profiles that have no Host.
+- id: web
+  config:
+    searchProvider: dsh-ddg
 - insert:
     - id: dsh-desktop-manager
       name: dsh-desktop-manager

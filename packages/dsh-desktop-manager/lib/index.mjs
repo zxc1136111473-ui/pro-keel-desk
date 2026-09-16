@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { accessSync, copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { access, mkdir, readFile, writeFile, rm } from 'node:fs/promises'
+import { access, mkdir, readFile, writeFile, rm, cp } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -17,7 +17,7 @@ import {
   probeReverify,
   runReverifyTool,
 } from './reverify.mjs'
-import { PENTAGI_TOOLS, runPentagiTool } from './pentagi.mjs'
+import { PENTAGI_TOOLS, runPentagiTool, duckduckgo } from './pentagi.mjs'
 import {
   probePentagiRuntime,
   startPentagiRuntime,
@@ -33,7 +33,8 @@ import {
   pentagiComposeEnv,
   whichDocker,
 } from './pentagi-runtime.mjs'
-import { snapshotHarnessLlms, inspectHarnessLlms, pickHarnessLlm, applyLlmToEnvText, syncGraphqlProviders } from './pentagi-providers.mjs'
+import { snapshotHarnessLlms, inspectHarnessLlms, pickHarnessLlm, applyLlmToEnvText, syncGraphqlProviders, listHarnessLlmProviders } from './pentagi-providers.mjs'
+import { readHarnessCredentials } from './pentagi-credentials.mjs'
 
 export const name = 'dsh-desktop-manager'
 // webServer 不能写进必选 inject：CLI/TUI 没有 HTTP 层，写了会一直 waiting。
@@ -41,9 +42,44 @@ export const name = 'dsh-desktop-manager'
 export const inject = ['loader', 'systemPrompt', 'tools']
 export { ARMOR_MODES, DEFAULT_ARMOR_MODE, normalizeArmorMode }
 
-const repositoryRoot = dirname(dirname(dirname(dirname(fileURLToPath(import.meta.url)))))
-const pluginsRoot = join(repositoryRoot, 'packages')
-const profilesDir = join(dirname(fileURLToPath(import.meta.url)), 'profiles')
+const hereDir = dirname(fileURLToPath(import.meta.url))
+const managerRoot = dirname(hereDir)
+const repositoryRoot = dirname(dirname(managerRoot))
+const profilesDir = join(hereDir, 'profiles')
+
+function userPluginsRoot(env = process.env) {
+  return join(userDataHome(env), 'plugins')
+}
+
+function userZeroRoot(env = process.env) {
+  return join(userPluginsRoot(env), 'dsh-infinite-gen-1')
+}
+
+function bundledZeroCandidates() {
+  return [
+    join(managerRoot, '..', 'dsh-infinite-gen-1'),
+    join(hereDir, '..', '..', 'dsh-infinite-gen-1'),
+    join(repositoryRoot, 'packages', 'dsh-infinite-gen-1'),
+  ]
+}
+
+async function resolveZeroPlugin(env = process.env) {
+  for (const candidate of [...bundledZeroCandidates(), userZeroRoot(env)]) {
+    if (await pathExists(join(candidate, 'package.json'))) return candidate
+  }
+  return null
+}
+
+function normalizeSettings(raw) {
+  const settings = raw && typeof raw === 'object' ? { ...raw } : {}
+  if (!settings.plugins || typeof settings.plugins !== 'object' || Array.isArray(settings.plugins)) {
+    settings.plugins = {}
+  }
+  if (!settings.coldbrew || typeof settings.coldbrew !== 'object' || Array.isArray(settings.coldbrew)) {
+    settings.coldbrew = {}
+  }
+  return settings
+}
 
 /**
  * 用户数据根：`$DSH_HOME`，未设置则 `~/.dsh`。
@@ -159,7 +195,7 @@ const PROFILES = {
     reverifyFile: 'codex-reverify.md',
     pentagiFile: 'codex-pentagi.md',
     // 模型名命中规则（大小写不敏感，取第一个命中）
-    patterns: ['gpt', 'codex', 'o1', 'o3'],
+    patterns: ['gpt', 'codex', 'o1', 'o3', 'openai'],
   },
   claude: {
     id: 'claude',
@@ -168,7 +204,7 @@ const PROFILES = {
     file: 'claude.md',
     reverifyFile: 'claude-reverify.md',
     pentagiFile: 'claude-pentagi.md',
-    patterns: ['claude'],
+    patterns: ['claude', 'anthropic', 'sonnet', 'opus', 'haiku'],
   },
   grok: {
     id: 'grok',
@@ -177,7 +213,7 @@ const PROFILES = {
     file: 'grok.md',
     reverifyFile: 'grok-reverify.md',
     pentagiFile: 'grok-pentagi.md',
-    patterns: ['grok'],
+    patterns: ['grok', 'xai'],
   },
   glm: {
     id: 'glm',
@@ -202,7 +238,9 @@ const PROFILES = {
 /** 按模型名匹配 profile id；默认回落 DeepSeek。 */
 export function matchProfileId(modelName) {
   const name = String(modelName ?? '').toLowerCase()
-  for (const profile of Object.values(PROFILES)) {
+  const order = ['grok', 'claude', 'glm', 'codex', 'deepseek']
+  for (const id of order) {
+    const profile = PROFILES[id]
     if (profile.patterns.some(pattern => name.includes(pattern))) return profile.id
   }
   return 'deepseek'
@@ -266,9 +304,9 @@ function loadSettingsSync() {
   const dest = settingsFile()
   migrateLegacyFile(dest, legacySettingsFile())
   try {
-    settingsCache = JSON.parse(readFileSync(dest, 'utf8'))
+    settingsCache = normalizeSettings(JSON.parse(readFileSync(dest, 'utf8')))
   } catch {
-    settingsCache = {}
+    settingsCache = normalizeSettings({})
   }
   return settingsCache
 }
@@ -278,9 +316,9 @@ async function getSettings() {
   migrateLegacyFile(dest, legacySettingsFile())
   const settings = await (async () => {
     if (await pathExists(dest)) {
-      return JSON.parse(await readFile(dest, 'utf8'))
+      return normalizeSettings(JSON.parse(await readFile(dest, 'utf8')))
     }
-    return { plugins: {} }
+    return normalizeSettings({})
   })()
   settingsCache = settings
   return settings
@@ -553,22 +591,61 @@ export function apply(ctx) {
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
     },
     async execute() {
+      const backend = await probePentagi()
       return {
         version: PENTAGI_VERSION,
         control: 'orchestrate',
         source: PENTAGI_SOURCE,
-        backend: await probePentagi(),
+        defaultProfile: 'deepseek',
+        backend: {
+          docker: backend?.docker?.ok === true,
+          api: backend?.api?.ok === true,
+          apiStatus: backend?.api?.status ?? null,
+          tokenPresent: backend?.tokenPresent === true,
+          compose: backend?.compose?.running === true,
+          kali: backend?.sandbox?.ok === true,
+          embedding: backend?.embedding?.source ?? 'none',
+          provider: backend?.harnessProvider ?? 'auto',
+          error: backend?.error ?? backend?.api?.error ?? null,
+        },
         profiles: Object.values(PROFILES).map(profile => ({
           id: profile.id,
           name: profile.name,
           short: profile.short,
           patterns: profile.patterns,
-          prompt: loadPromptSync(profile, 'pentagi'),
+          promptChars: loadPromptSync(profile, 'pentagi').length,
         })),
-        defaultProfile: 'deepseek',
       }
     },
   }), 'dsh-desktop-manager: pentagi profiles tool')
+
+  const registerDdg = (webCtx) => {
+    webCtx.effect(() => webCtx.web.registerSearchProvider({
+      id: 'dsh-ddg',
+      available: () => true,
+      async search(request) {
+        const hit = await duckduckgo(String(request?.query ?? ''), Number(request?.maxResults) || 8)
+        const sources = (hit.results ?? []).map(item => ({
+          url: item.href,
+          title: item.title || item.href,
+          snippet: item.title || '',
+        }))
+        return {
+          content: hit.snippet || undefined,
+          sources,
+          truncated: false,
+          engine: hit.engine || 'duckduckgo',
+          ok: hit.ok !== false,
+          error: hit.error,
+        }
+      },
+    }), 'dsh-desktop-manager: ddg search provider')
+  }
+  if (typeof ctx.inject === 'function') {
+    ctx.inject(['web'], registerDdg)
+  } else if (ctx.web) {
+    registerDdg(ctx)
+  }
 
   // Reverify MCP 有的工具返回 object，有的返回 array（re_disasm）。
   // 无约束 JSON schema 才能让两种都通过 tools 输出校验。
@@ -633,11 +710,17 @@ export function apply(ctx) {
 
         if (req.method === 'GET') {
           if (action === 'status') {
-            const installed = await pathExists(join(pluginsRoot, 'dsh-infinite-gen-1'))
+            const installedAt = await resolveZeroPlugin()
             const settings = await getSettings()
             const enabled = settings.plugins['dsh-infinite-gen-1']?.enabled !== false
             res.writeHead(200, { 'Content-Type': 'application/json' })
-            res.end(JSON.stringify({ installed, enabled, isRunning }))
+            res.end(JSON.stringify({
+              installed: installedAt !== null,
+              bundled: installedAt !== null && bundledZeroCandidates().includes(installedAt),
+              path: installedAt,
+              enabled,
+              isRunning,
+            }))
             return
           }
           if (action === 'logs') {
@@ -659,18 +742,40 @@ export function apply(ctx) {
 
           try {
             if (action === 'install') {
-              const target = join(pluginsRoot, 'dsh-infinite-gen-1')
-              if (!await pathExists(target)) {
-                await run('git', ['clone', 'https://github.com/Minglink/dsh-infinite-gen-1.git', target])
-                await run('pnpm', ['install'], { cwd: target })
+              let existing = await resolveZeroPlugin()
+              if (existing) {
+                taskLogs.push(`冷咖啡 Zero 已随应用打包：${existing}`)
+              } else {
+                const target = userZeroRoot()
+                await mkdir(userPluginsRoot(), { recursive: true })
+                const source = bundledZeroCandidates().find(candidate => existsSync(join(candidate, 'package.json')))
+                if (source) {
+                  taskLogs.push(`复制随包插件到 ${target}`)
+                  await cp(source, target, { recursive: true })
+                } else {
+                  taskLogs.push('应用包内未找到插件，改从仓库克隆到用户目录')
+                  await run('git', ['clone', '--depth', '1', 'https://github.com/Minglink/dsh-infinite-gen-1.git', target])
+                }
+                existing = target
               }
-              res.writeHead(200)
-              res.end('OK')
+              const settings = await getSettings()
+              settings.plugins['dsh-infinite-gen-1'] = { enabled: true }
+              await saveSettings(settings)
+              taskLogs.push('已启用冷咖啡 Zero。重启应用后系统提示词生效。')
+              res.writeHead(200, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ ok: true, installed: true, path: existing, logs: taskLogs }))
             } else if (action === 'uninstall') {
-              const target = join(pluginsRoot, 'dsh-infinite-gen-1')
-              await rm(target, { recursive: true, force: true })
-              res.writeHead(200)
-              res.end('OK')
+              const settings = await getSettings()
+              settings.plugins['dsh-infinite-gen-1'] = { enabled: false }
+              await saveSettings(settings)
+              const userCopy = userZeroRoot()
+              if (await pathExists(userCopy) && !bundledZeroCandidates().includes(userCopy)) {
+                await rm(userCopy, { recursive: true, force: true })
+                taskLogs.push(`已删除用户目录副本：${userCopy}`)
+              }
+              taskLogs.push('已停用冷咖啡 Zero（随包文件保留）。重启后提示词卸载。')
+              res.writeHead(200, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ ok: true, installed: await resolveZeroPlugin() !== null, logs: taskLogs }))
             } else if (action === 'toggle') {
               const settings = await getSettings()
               const current = settings.plugins['dsh-infinite-gen-1']?.enabled !== false
@@ -739,7 +844,7 @@ export function apply(ctx) {
           // 还没有记录的会话（也就是新会话）取默认值：全局开关优先，其次看
           // 当前模型命中的那个 profile 是否被设成「新会话默认开启」。
           const settings = await getSettings()
-          const model = url.searchParams.get('model') ?? ''
+          const model = [url.searchParams.get('model'), url.searchParams.get('provider')].filter(Boolean).join(' ')
           const matched = matchProfileId(model)
           const defaultEnabled = settings.coldbrew?.defaultEnabled === true
             || (matched !== null
@@ -764,7 +869,7 @@ export function apply(ctx) {
           res.end(JSON.stringify({
             ...state,
             mode,
-            profileId: state.enabled ? matchProfileId(state.model) : null,
+            profileId: state.enabled ? matchProfileId(model || state.model) : null,
           }))
           return
         }
@@ -988,8 +1093,19 @@ export function apply(ctx) {
               const inspected = await inspectHarnessLlms()
               const pick = pickHarnessLlm(inspected)
               if (!pick) {
+                const creds = readHarnessCredentials()
+                const listed = listHarnessLlmProviders()
+                const keys = Object.keys(creds)
                 res.writeHead(400, { 'Content-Type': 'application/json' })
-                res.end(JSON.stringify({ error: 'Harness 里没有带 API key 的模型' }))
+                res.end(JSON.stringify({
+                  error: listed.length
+                    ? 'Harness 模型都没有可用的 API key（.settings.yaml 有 provider，但凭证对不上）'
+                    : (keys.length
+                      ? 'Harness 里没有可同步的模型（已读到凭证，但 settings.yaml 没有带 baseURL 的 llm-pi-ai provider）'
+                      : 'Harness 里没有带 API key 的模型。请在设置 → 模型里填 key；桌面版凭证在 $DSH_HOME/.credentials.yaml 的 refs 下。'),
+                  credentials: keys,
+                  providers: listed.map((p) => p.id),
+                }))
                 return
               }
               const dest = pentagiEnvPath()
@@ -997,12 +1113,17 @@ export function apply(ctx) {
               const embedding = await resolveEmbeddingForEnv((line) => taskLogs.push(line))
               writeFileSync(dest, applyLlmToEnvText(prev, pick, { embedding }))
               const synced = await syncGraphqlProviders(pick, inspected)
-              res.writeHead(200, { 'Content-Type': 'application/json' })
+              const gqlOk = synced?.ok !== false
+              const note = gqlOk
+                ? '已写入 .env 与 GraphQL。若容器还在用旧 LLM_SERVER_*，点一次「重新启动后端」。'
+                : `Harness 模型已写入 .env，但官方栈 GraphQL 同步失败：${synced?.error || synced?.upsert?.msg || 'auth required'}。可再点一次同步，或重启后端后重试。`
+              res.writeHead(gqlOk ? 200 : 502, { 'Content-Type': 'application/json' })
               res.end(JSON.stringify({
                 ...await probePentagi(),
                 harness: await snapshotHarnessLlms(),
                 synced,
-                note: '已写入 .env 与 GraphQL。若容器还在用旧 LLM_SERVER_*，点一次「重新启动后端」。',
+                error: gqlOk ? undefined : note,
+                note,
               }))
             } catch (error) {
               res.writeHead(500, { 'Content-Type': 'application/json' })

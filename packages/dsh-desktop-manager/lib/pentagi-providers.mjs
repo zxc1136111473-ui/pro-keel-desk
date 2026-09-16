@@ -1,27 +1,15 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { readHarnessCredentials, readHarnessSettingsText, userHome } from './pentagi-credentials.mjs'
 
 
 const here = dirname(fileURLToPath(import.meta.url))
 const SYNC_PREFIX = 'dsh-'
 
-function userHome(env = process.env) {
-  const configured = String(env.DSH_HOME ?? '').trim()
-  if (configured) return resolve(configured)
-  return join(homedir(), '.dsh')
-}
-
 function readCredentials(env = process.env) {
-  const file = join(userHome(env), '.credentials.yaml')
-  if (!existsSync(file)) return {}
-  const out = {}
-  for (const line of readFileSync(file, 'utf8').split('\n')) {
-    const m = line.match(/^([A-Z0-9_]+):\s*(.+)\s*$/)
-    if (m) out[m[1]] = m[2].trim().replace(/^['"]|['"]$/g, '')
-  }
-  return out
+  return readHarnessCredentials(env)
 }
 
 function parseHarnessProviders(text) {
@@ -78,15 +66,16 @@ function parseHarnessProviders(text) {
 }
 
 export function listHarnessLlmProviders(env = process.env) {
-  const settingsFile = join(userHome(env), 'settings.yaml')
-  const text = existsSync(settingsFile) ? readFileSync(settingsFile, 'utf8') : ''
+  const { text } = readHarnessSettingsText(env)
   const creds = readCredentials(env)
   const parsed = parseHarnessProviders(text)
   const defaultMatch = text.match(/agent-default-model:[\s\S]*?provider:\s*(\S+)/)
   const defaultProvider = defaultMatch ? defaultMatch[1] : ''
   const defaultModel = (text.match(/agent-default-model:[\s\S]*?model:\s*(\S+)/) || [])[1] || ''
   return parsed.map((p) => {
-    const key = creds[p.apiKeyEnv] || ''
+    const fromFile = p.apiKeyEnv ? creds[p.apiKeyEnv] : ''
+    const fromEnv = p.apiKeyEnv ? String(env[p.apiKeyEnv] || '').trim() : ''
+    const key = fromFile || fromEnv
     const models = p.models?.length ? p.models : [{ id: defaultModel || 'default' }]
     return {
       id: p.id,

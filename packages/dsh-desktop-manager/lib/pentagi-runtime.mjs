@@ -6,6 +6,8 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { pipeline } from 'node:stream/promises'
 
+import { readHarnessCredentials } from './pentagi-credentials.mjs'
+
 const here = dirname(fileURLToPath(import.meta.url))
 
 const EXTRA_PATH = [
@@ -235,14 +237,7 @@ function absorbSetCookie(jar, response) {
 }
 
 function readCredentials(env = process.env) {
-  const file = join(userHome(env), '.credentials.yaml')
-  if (!existsSync(file)) return {}
-  const out = {}
-  for (const line of readFileSync(file, 'utf8').split('\n')) {
-    const m = line.match(/^([A-Z0-9_]+):\s*(.+)\s*$/)
-    if (m) out[m[1]] = m[2].trim()
-  }
-  return out
+  return readHarnessCredentials(env)
 }
 
 function colimaSock() {
@@ -758,9 +753,12 @@ async function bootstrapToken(onLog, env = process.env) {
   return { ok: true, token, password: LOCAL_PASSWORD }
 }
 
-export async function pentagiGraphql(query, variables = {}, env = process.env) {
-  const cfg = readPentagiSettings(env)
-  const token = String(cfg.token || env.DSH_PENTAGI_TOKEN || '')
+function graphqlAuthFailed(result) {
+  const code = result?.json?.code || result?.json?.errors?.[0]?.extensions?.code
+  return result?.status === 401 || result?.status === 403 || code === 'AuthRequired'
+}
+
+async function graphqlOnce(token, query, variables, env = process.env) {
   const url = `${API_URL(env)}/api/v1/graphql`
   if (!token) return { ok: false, error: 'missing token', url }
   const body = JSON.stringify({ query, variables })
@@ -776,10 +774,21 @@ export async function pentagiGraphql(query, variables = {}, env = process.env) {
     const text = await res.text()
     let json = null
     try { json = JSON.parse(text) } catch { /* */ }
-    return { ok: res.ok && !json?.errors, status: res.status, url, json, body: text.slice(0, 8000) }
+    return { ok: res.ok && !json?.errors && json?.code !== 'AuthRequired', status: res.status, url, json, body: text.slice(0, 8000) }
   } catch (error) {
     return { ok: false, error: String(error?.message ?? error), url }
   }
+}
+
+export async function pentagiGraphql(query, variables = {}, env = process.env) {
+  const cfg = readPentagiSettings(env)
+  const token = String(cfg.token || env.DSH_PENTAGI_TOKEN || '')
+  const result = await graphqlOnce(token, query, variables, env)
+  if (!graphqlAuthFailed(result) && result.ok !== false) return result
+  if (token && !graphqlAuthFailed(result)) return result
+  const minted = await ensurePentagiApiToken(() => {}, env, { force: true })
+  if (!minted.ok || !minted.token) return result.ok === false && result.error ? result : { ok: false, error: minted.error || 'auth required', url: result.url, json: result.json }
+  return graphqlOnce(minted.token, query, variables, env)
 }
 
 function persistToken(token, env = process.env) {

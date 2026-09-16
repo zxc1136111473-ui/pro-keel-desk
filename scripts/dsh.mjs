@@ -22,9 +22,21 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const repoRoot = dirname(here)
-const officialBin = join(repoRoot, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
-const fusedPatch = join(repoRoot, 'build', 'dsh-fused-cli.patch.yml')
+
+function firstExisting(paths) {
+  return paths.find((path) => existsSync(path))
+}
+
+const officialBin = firstExisting([
+  join(here, '..', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
+  join(here, 'app', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
+  join(here, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
+])
+const fusedPatch = firstExisting([
+  join(here, '..', 'build', 'dsh-fused-cli.patch.yml'),
+  join(here, 'dsh-fused-cli.patch.yml'),
+  join(here, '..', 'dsh-fused-cli.patch.yml'),
+])
 
 function dshHome() {
   const configured = String(process.env.DSH_HOME ?? '').trim()
@@ -58,7 +70,8 @@ function ensureTuiProfile() {
 }
 
 function withFusedPatch(args) {
-  return args.includes('--patch') ? args : [...args, '--patch', fusedPatch]
+  if (args.includes('--patch') || !fusedPatch) return args
+  return [...args, '--patch', fusedPatch]
 }
 
 function rewriteArgv(argv) {
@@ -84,8 +97,8 @@ function rewriteArgv(argv) {
   return args
 }
 
-if (!existsSync(officialBin)) {
-  console.error('dsh: official launcher missing. Run npm ci in the dsh-desktop tree first.')
+if (!officialBin) {
+  console.error('dsh: official launcher missing. Run npm ci in the dsh-desktop tree, or install DSH Desktop.')
   process.exit(1)
 }
 

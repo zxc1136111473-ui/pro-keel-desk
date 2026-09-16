@@ -387,6 +387,14 @@
         "to": "dsh-desktop-safe.patch.yml"
       },
       {
+        "from": "build/dsh-fused-cli.patch.yml",
+        "to": "dsh-fused-cli.patch.yml"
+      },
+      {
+        "from": "scripts/dsh.mjs",
+        "to": "dsh.mjs"
+      },
+      {
         "from": "build/splash.html",
         "to": "splash.html"
       },

@@ -179,8 +179,8 @@ async function main(): Promise<void> {
   };
   const liveDefaults = liveResult.value;
   assert(
-    liveDefaults.enabled && liveDefaults.capture === false && liveDefaults.distill === false && liveDefaults.recall,
-    '记忆模式开关 schema 默认：总开+召回开，捕获/蒸馏关（按需写入）',
+    liveDefaults.enabled && liveDefaults.capture === true && liveDefaults.distill === true && liveDefaults.recall,
+    '记忆模式开关 schema 默认：总开 + 捕获/蒸馏/召回全开（与部署上限 AND；用户可在自动化区关掉）',
   );
 
   console.log('== 2. 清洗 ==');
@@ -612,6 +612,14 @@ async function main(): Promise<void> {
       // fake connection：捕获 rpc.handle 注册的 handler；
       // llm/agentDefaultModel 提供 listProviders/listModels/currentSelection 假实现（模型选择器端点用）
       let handler: ((endpoint: string, payload?: unknown) => Promise<unknown>) | undefined;
+      const connection = {
+        rpc: {
+          handle: (_ch: string, h: typeof handler) => {
+            handler = h;
+            return async () => {};
+          },
+        },
+      };
       const fakeCtx = {
         llm: {
           listProviders: () => [{ id: 'deepseek-official', name: 'DeepSeek' }, { id: 'custom-oai', name: '自定义 OpenAI' }],
@@ -627,10 +635,16 @@ async function main(): Promise<void> {
         },
         get: (name: string) =>
           name === 'connection'
-            ? { rpc: { handle: (ch: string, h: typeof handler) => { handler = h; return async () => {}; } } }
-            : name === 'agentDefaultModel'
-              ? { currentSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-v4-flash' }) }
-              : undefined,
+            ? connection
+            : name === 'webServer'
+              ? {}
+              : name === 'agentDefaultModel'
+                ? { currentSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-v4-flash' }) }
+                : undefined,
+        connection,
+        inject: (names: string[], fn: (scope: unknown) => void) => {
+          if (names.includes('connection') && names.includes('webServer')) fn(fakeCtx);
+        },
         on: () => () => {},
         effect: (f: () => (() => void)) => f(),
       } as never;
@@ -1624,6 +1638,36 @@ async function main(): Promise<void> {
         'flush() 等待 L0 串行链排空（排队消息先落盘再关库）',
       );
 
+      // 14a2. 运行时捕获关：事件入口直接 return，不落盘（现场：schema 默认 false 导致工作台空）
+      let evOff: ((session: unknown, event: unknown) => void) | undefined;
+      const ctxOff = {
+        on: (_e: string, h: (session: unknown, event: unknown) => void) => {
+          evOff = h;
+          return () => {};
+        },
+      } as never;
+      const liveOff = { supported: true, get: () => ({ enabled: true, capture: false, distill: true, reasoningEffort: '' }) };
+      const flushOff = registerCapture(
+        ctxOff,
+        { capture: { enabled: true, stripCodeBlocks: false, maxMessageChars: 4000 } } as never,
+        { enqueue: () => { throw new Error('capture-off must not enqueue'); } } as never,
+        l0T4,
+        silentLogger,
+        liveOff as never,
+        modesT4,
+      );
+      assert(typeof flushOff === 'function', '部署上限开时仍注册捕获（由运行时开关门控）');
+      const nowOff = Date.now();
+      evOff!('sess-off', { type: 'turn/start', time: nowOff, data: { turn: 9 } });
+      evOff!('sess-off', { type: 'user/message', time: nowOff + 1, data: { id: 'u-off', source: { kind: 'user' }, content: [{ type: 'text', text: '不该落盘' }] } });
+      evOff!('sess-off', { type: 'turn/end', time: nowOff + 2, data: { turn: 9 } });
+      await flushOff!();
+      const offJsonl = path.join(tmpT4, 'conversations', `${dayKey(nowOff)}.jsonl`);
+      if (existsSync(offJsonl)) {
+        const body = await fs.readFile(offJsonl, 'utf8');
+        assert(!body.includes('不该落盘'), '运行时 capture=false 时 L0 不写入该轮');
+      }
+
       // 14b. 调度停止标志：stop 后首任务完成、后续任务不再取
       const stateT4 = new StateStore(StateStore.pathFor(tmpT4));
       const runner2 = new MemoryRunner(
@@ -2591,6 +2635,9 @@ async function main(): Promise<void> {
       let serviceListener: ((name: string, impl: unknown) => void) | undefined;
       const ctxC = {
         get: (n: string) => (n === 'connection' ? svc : n === 'webServer' ? {} : undefined),
+        inject: (names: string[], fn: (scope: unknown) => void) => {
+          if (names.includes('connection') && names.includes('webServer')) fn(ctxC);
+        },
         on: (_e: string, h: (name: string, impl: unknown) => void) => {
           serviceListener = h;
           return () => {};
