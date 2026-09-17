@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { pipeline } from 'node:stream/promises'
 
 import { readHarnessCredentials } from './pentagi-credentials.mjs'
+import { listHarnessSnapshot } from './pentagi-providers.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -179,6 +180,7 @@ function insecureHttpsRequest(url, init = {}) {
   return new Promise((resolvePromise, reject) => {
     const u = new URL(url)
     const headers = { ...(init.headers ?? {}) }
+    const timeoutMs = Number(init.timeoutMs) > 0 ? Number(init.timeoutMs) : 2_000
     const req = https.request({
       hostname: u.hostname,
       port: u.port || 443,
@@ -186,6 +188,7 @@ function insecureHttpsRequest(url, init = {}) {
       method: init.method || 'GET',
       headers,
       rejectUnauthorized: false,
+      timeout: timeoutMs,
     }, (res) => {
       const chunks = []
       res.on('data', c => chunks.push(c))
@@ -207,6 +210,9 @@ function insecureHttpsRequest(url, init = {}) {
           json: async () => JSON.parse(buf.toString('utf8')),
         })
       })
+    })
+    req.on('timeout', () => {
+      req.destroy(new Error(`timeout after ${timeoutMs}ms`))
     })
     req.on('error', reject)
     if (init.body) req.write(init.body)
@@ -838,25 +844,34 @@ export async function ensurePentagiApiToken(onLog = () => {}, env = process.env,
   return { ok: true, token: boot.token, minted: true, api: probe }
 }
 
-export async function probePentagiRuntime(env = process.env) {
+let pentagiProbeCache = { at: 0, fullAt: 0, light: null, full: null }
+
+export async function probePentagiRuntime(env = process.env, { light = false } = {}) {
+  const now = Date.now()
+  const cached = light ? (pentagiProbeCache.light || pentagiProbeCache.full) : pentagiProbeCache.full
+  const cachedAt = light ? pentagiProbeCache.at : pentagiProbeCache.fullAt
+  if (cached && now - cachedAt < 4_000) return cached
+
   const dockerBin = which('docker', env)
-  const docker = await run(dockerBin, ['--version'], { timeoutMs: 5_000, env })
-  const daemon = docker.ok ? await run(dockerBin, ['info'], { timeoutMs: 8_000, env }) : { ok: false }
+  const docker = await run(dockerBin, ['--version'], { timeoutMs: 2_500, env })
+  const daemon = docker.ok && !light
+    ? await run(dockerBin, ['info'], { timeoutMs: 3_000, env })
+    : { ok: docker.ok }
   const root = pentagiRoot(env)
   const cfg = readPentagiSettings(env)
   const url = API_URL(env)
   let api = { ok: false, url }
   try {
-    const res = await insecureFetch(url, { redirect: 'follow' })
+    const res = await insecureFetch(url, { redirect: 'follow', timeoutMs: 2_000 })
     api = { ok: res.ok || res.status === 401 || res.status === 302, url, status: res.status }
   } catch (error) {
     api = { ok: false, url, error: String(error?.cause?.message ?? error?.message ?? error) }
   }
   const tokenPresent = Boolean(cfg.token)
-  let compose = { ok: false }
-  if (daemon.ok && existsSync(join(root, 'docker-compose.yml'))) {
-    const ps = await run(dockerBin, ['compose', 'ps', '--format', 'json'], { cwd: root, timeoutMs: 15_000, env })
-    compose = { ok: ps.ok, running: /pentagi/.test(ps.stdout), raw: ps.stdout.slice(0, 500) }
+  let compose = { ok: false, running: api.ok }
+  if (!light && daemon.ok && existsSync(join(root, 'docker-compose.yml'))) {
+    const ps = await run(dockerBin, ['compose', 'ps', '--format', 'json'], { cwd: root, timeoutMs: 5_000, env })
+    compose = { ok: ps.ok, running: /pentagi/.test(ps.stdout) || api.ok, raw: ps.stdout.slice(0, 500) }
   }
   const image = pentestImage(env)
   const sandboxEnabled = pentagiSandboxEnabled(env)
@@ -869,8 +884,8 @@ export async function probePentagiRuntime(env = process.env) {
     work: join(userHome(env), 'pentagi', 'sandbox-work'),
     dind: { enabled: dindEnabled, ok: false, socket: dockerSocketInVm() },
   }
-  if (daemon.ok) {
-    const inspect = await run(dockerBin, ['image', 'inspect', image, '--format', '{{.Os}}/{{.Architecture}}'], { timeoutMs: 8_000, env })
+  if (docker.ok) {
+    const inspect = await run(dockerBin, ['image', 'inspect', image, '--format', '{{.Os}}/{{.Architecture}}'], { timeoutMs: 3_000, env })
     sandbox.ok = inspect.ok
     sandbox.inspect = inspect.stdout.trim() || inspect.stderr.slice(0, 400)
     sandbox.dind = {
@@ -883,12 +898,22 @@ export async function probePentagiRuntime(env = process.env) {
         : '关闭时 Kali 里没有 docker daemon',
     }
   }
-  return {
+  const embedding = {
+    source: embeddingSource(cfg),
+    apiUrl: String(cfg.embeddingApiUrl || ''),
+    apiModel: String(cfg.embeddingApiModel || 'text-embedding-3-small'),
+    hasKey: Boolean(String(cfg.embeddingApiKey || '').trim()),
+    local: await probeLocalEmbed(env),
+    fastembed: light ? { ok: false, skipped: true } : await probeFastembedInstalled(env).catch(() => ({ ok: false })),
+    port: localEmbedPort(env),
+    model: LOCAL_EMBED_MODEL,
+  }
+  const result = {
     version: '1.0.0',
     source: 'https://github.com/vxcontrol/pentagi',
     root,
     docker: docker.ok
-      ? { ok: true, version: docker.stdout.trim(), daemon: daemon.ok, bin: dockerBin }
+      ? { ok: true, version: docker.stdout.trim(), daemon: Boolean(daemon.ok), bin: dockerBin }
       : { ok: false, error: docker.stderr || 'docker not found', daemon: false, bin: dockerBin },
     dockerStack: {
       os: process.platform,
@@ -906,17 +931,17 @@ export async function probePentagiRuntime(env = process.env) {
     sandbox,
     backendReady: Boolean((api.ok || compose.running) && tokenPresent),
     harnessProvider: cfg.harnessProvider || 'auto',
-    embedding: {
-      source: embeddingSource(cfg),
-      apiUrl: String(cfg.embeddingApiUrl || ''),
-      apiModel: String(cfg.embeddingApiModel || 'text-embedding-3-small'),
-      hasKey: Boolean(String(cfg.embeddingApiKey || '').trim()),
-      local: await probeLocalEmbed(env),
-      fastembed: await probeFastembedInstalled(env).catch(() => ({ ok: false })),
-      port: localEmbedPort(env),
-      model: LOCAL_EMBED_MODEL,
-    },
+    harness: listHarnessSnapshot(env),
+    embedding,
+    light,
   }
+  pentagiProbeCache = {
+    at: now,
+    fullAt: light ? pentagiProbeCache.fullAt : now,
+    light: result,
+    full: light ? pentagiProbeCache.full : result,
+  }
+  return result
 }
 
 export function embeddingSource(cfg = {}) {
@@ -1170,6 +1195,12 @@ export async function startPentagiRuntime(onLog = () => {}, env = process.env) {
     } catch (error) {
       onLog(`GraphQL provider 同步失败：${error?.message ?? error}`)
     }
+  }
+  if (embeddingSource(readPentagiSettings(env)) === 'local') {
+    onLog('本机向量已勾选，拉起 sidecar…')
+    await ensureLocalEmbedder(onLog, env).catch((error) => {
+      onLog(`embedder autostart: ${error?.message ?? error}`)
+    })
   }
   const status = await probePentagiRuntime(env)
   return {

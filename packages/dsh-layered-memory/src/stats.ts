@@ -129,64 +129,110 @@ export function registerMemoryRpc(
   /** 当前 handle 绑定的 connection 实例（internal/service 第二参；用于识别实例替换）。 */
   let registeredImpl: unknown;
 
+  const rpcHandler = async (endpoint: string, payload: unknown) => {
+    try {
+      const value = await handleEndpoint(endpoint, payload, {
+        ctx,
+        cfg,
+        stores,
+        status,
+        live,
+        modes,
+        dataDir: dataDir ?? resolveDataDir(cfg),
+        logger,
+        rebuild,
+        embedManager,
+        sessionInfo,
+      });
+      return { ok: true, value };
+    } catch (err) {
+      return {
+        ok: false,
+        error: { code: 'internal', message: err instanceof Error ? err.message : String(err), details: {} },
+      };
+    }
+  };
+
   const tryRegister = (scope: Context): void => {
     if (holding) return;
-    const connection = scope.get('connection');
-    if (!connection?.rpc?.handle) return;
-    // handle() mounts on the caller fiber's webServer. Accessing
-    // scope.webServer without inject throws and takes the whole Host down.
-    try {
-      if (!scope.get('webServer')) return;
-    } catch {
-      return;
-    }
     holding = true;
-    let dispose: (() => Promise<void>) | void;
+    let dispose: (() => Promise<void> | void) | void;
+    const connection = (() => {
+      try {
+        if (typeof scope.get === 'function') return scope.get('connection');
+      } catch {
+        /* without inject */
+      }
+      return undefined;
+    })();
     try {
-      dispose = connection.rpc.handle('/rpc', async (endpoint, payload) => {
-        try {
-          const value = await handleEndpoint(endpoint, payload, {
-            ctx: scope,
-            cfg,
-            stores,
-            status,
-            live,
-            modes,
-            dataDir: dataDir ?? resolveDataDir(cfg),
-            logger,
-            rebuild,
-            embedManager,
-            sessionInfo,
-          });
-          return { ok: true, value };
-        } catch (err) {
-          return {
-            ok: false,
-            error: { code: 'internal', message: err instanceof Error ? err.message : String(err), details: {} },
-          };
-        }
-      });
+      // 0.1.5：handle() 把路由挂在「读到 connection 的那个 Context」上。
+      // connection 插件自己的 fiber 没有 webServer，scope.get('connection').rpc.handle
+      // 会抛 without inject。必须用带 webServer 的 scoped ctx 上的 connection。
+      if (connection?.rpc?.handle) {
+        dispose = connection.rpc.handle('/rpc', rpcHandler);
+      }
     } catch (err) {
+      logger.debug?.(`[memory] connection.rpc.handle 不可用，改挂 webServer 前缀：${err instanceof Error ? err.message : String(err)}`);
+      dispose = undefined;
+    }
+    if (!dispose && scope.webServer?.register) {
+      dispose = scope.webServer.register({
+        kind: 'prefix',
+        path: '/rpc',
+        handler: async (req: { method?: string; url?: string }, res: { setHeader(k: string, v: string): void; writeHead(code: number, headers?: Record<string, string>): void; end(body?: string): void }) => {
+          if (req.method !== 'POST') {
+            res.setHeader('Allow', 'POST');
+            res.writeHead(405);
+            res.end();
+            return;
+          }
+          const rejection = connection?.requestRejection?.(req);
+          if (rejection !== undefined) {
+            res.writeHead(rejection);
+            res.end(rejection === 401 ? 'unauthorized' : 'forbidden');
+            return;
+          }
+          const chunks: Buffer[] = [];
+          for await (const chunk of req as AsyncIterable<Buffer>) chunks.push(chunk);
+          let body: { payload?: unknown; rpcId?: string; method?: string } = {};
+          try {
+            body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as typeof body;
+          } catch {
+            res.writeHead(400);
+            res.end('body is not JSON');
+            return;
+          }
+          const rawPath = new URL(req.url ?? '/', 'http://localhost').pathname;
+          const endpoint = rawPath.startsWith('/rpc/') ? rawPath.slice('/rpc/'.length) : String(body.method ?? '');
+          const result = await rpcHandler(endpoint, body.payload);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ type: 'server-response', rpcId: body.rpcId, result }));
+        },
+      });
+    }
+    if (!dispose) {
       holding = false;
-      logger.warn?.(`[memory] RPC 注册失败：${err instanceof Error ? err.message : String(err)}`);
+      logger.warn?.('[memory] RPC 注册失败：webServer 与 connection.rpc.handle 都不可用');
       return;
     }
     registeredImpl = connection;
-    logger.debug?.('[memory] 状态 RPC 已注册（/rpc → dsh-memory/*）');
+    logger.info?.('[memory] 状态 RPC 已注册（/rpc → dsh-memory/*）');
     disposers.push(() => {
       holding = false;
       void dispose?.();
     });
   };
 
-  /** 释放全部持有注册（handle 随旧服务实例失效，holding 复位以允许重挂）。 */
+  /** 释放全部持有注册（handle 随旧实例失效，holding 复位以允许重挂）。 */
   const release = (): void => {
     for (const dispose of disposers.splice(0)) dispose();
   };
 
   const disposers: Array<() => void> = [];
 
-  ctx.inject(['connection', 'webServer'], (scope) => {
+  // webServer 不能进顶层 inject：TUI/headless 没有 HTTP 层。GUI 用 scoped inject。
+  ctx.inject(['webServer'], (scope) => {
     scope.effect(() => {
       tryRegister(scope);
       const off = scope.on('internal/service', (name: string, impl: unknown) => {

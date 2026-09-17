@@ -27,13 +27,49 @@ __export(client_exports, {
 });
 module.exports = __toCommonJS(client_exports);
 var import_react = require("react");
-var import_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
+
+// packages/dsh-desktop-manager/src/optional-service.mjs
+function optionalService(ctx, name2) {
+  if (typeof ctx?.get !== "function") return void 0;
+  try {
+    return ctx.get(name2);
+  } catch {
+    return void 0;
+  }
+}
 
 // packages/dsh-desktop-manager/src/client.css
-var client_default = "/* \u684C\u9762\u7BA1\u7406\u9875\u6837\u5F0F\u3002\n   \u53EA\u4F7F\u7528 ui-theme \u771F\u5B9E\u5B9A\u4E49\u7684 --dsw-* \u8BED\u4E49\u4EE4\u724C\uFF1A\u6DF1\u6D45\u4E3B\u9898\u5207\u6362\u65F6\u81EA\u52A8\u7FFB\u8F6C\uFF0C\n   \u4E0D\u51FA\u73B0\u4EFB\u4F55\u5B57\u9762\u8272\u503C\u3002\u547D\u540D\u7EDF\u4E00\u52A0 dsm- \u524D\u7F00\uFF0C\u907F\u514D\u4E0E\u5BBF\u4E3B\u6837\u5F0F\u76F8\u649E\u3002 */\n\n.dsm-root {\n  display: flex;\n  height: 100%;\n  flex-direction: column;\n  gap: 20px;\n  padding: 4px 2px;\n}\n\n.dsm-head h2 {\n  margin: 0 0 6px;\n  color: var(--dsw-alias-label-primary);\n  font-size: 18px;\n  font-weight: 650;\n  letter-spacing: -.01em;\n}\n\n.dsm-head p {\n  margin: 0;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 13px;\n  line-height: 1.6;\n}\n\n.dsm-list {\n  display: grid;\n  gap: 10px;\n}\n\n/* \u63D2\u4EF6\u5361\u7247\uFF1A\u4E0E\u8BBE\u7F6E\u9762\u677F\u5176\u5B83\u533A\u5757\u540C\u4E00\u5957\u5706\u89D2\u4E0E\u63CF\u8FB9\u8282\u594F\u3002 */\n.dsm-card {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 16px;\n  padding: 14px 16px;\n  border: 1px solid var(--dsw-alias-border-l1);\n  border-radius: 12px;\n  background: var(--dsw-alias-bg-layer-1);\n}\n\n.dsm-card-main {\n  display: flex;\n  min-width: 0;\n  flex-direction: column;\n  gap: 5px;\n}\n\n.dsm-card-title {\n  color: var(--dsw-alias-label-primary);\n  font-size: 14px;\n  font-weight: 600;\n}\n\n.dsm-card-id {\n  margin-left: 6px;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n  font-weight: 400;\n}\n\n/* \u72B6\u6001\u884C\u7528 StateDot \u7EC4\u4EF6\u8868\u8FBE\u8BED\u4E49\u8272\uFF0C\u4E0D\u7528\u5F69\u8272\u6587\u5B57\u3001\u66F4\u4E0D\u7528\u8868\u60C5\u3002 */\n.dsm-state {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n}\n\n.dsm-actions {\n  display: flex;\n  flex: none;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.dsm-action-group {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 8px;\n}\n\n.dsm-action-group + .dsm-action-group {\n  padding-left: 12px;\n  border-left: 1px solid var(--dsw-alias-border-l1);\n}\n\n@media (max-width: 560px) {\n  .dsm-action-group + .dsm-action-group {\n    padding-left: 0;\n    border-left: 0;\n  }\n}\n\n.dsm-logs {\n  display: flex;\n  min-height: 0;\n  flex: 1;\n  flex-direction: column;\n  gap: 8px;\n}\n\n/* \u5B89\u88C5/\u542F\u52A8\u8FDB\u5EA6\u6761\uFF1A\u767E\u5206\u6BD4 + \u6B65\u9AA4 + \u9884\u8BA1\u8017\u65F6\u3002 */\n.dsm-progress {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  padding: 10px 12px;\n  border: 1px solid var(--dsw-alias-border-l1);\n  border-radius: 10px;\n  background: var(--dsw-alias-bg-layer-2);\n}\n\n.dsm-progress-bar {\n  height: 8px;\n  overflow: hidden;\n  border-radius: 999px;\n  background: var(--dsw-alias-bg-layer-3);\n}\n\n.dsm-progress-fill {\n  height: 100%;\n  border-radius: 999px;\n  background: var(--dsw-alias-accent, var(--dsw-alias-label-primary));\n  transition: width 0.4s ease;\n}\n\n.dsm-progress-meta {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n}\n\n.dsm-progress-label {\n  min-width: 0;\n  flex: 1;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.dsm-progress-pct {\n  color: var(--dsw-alias-label-primary);\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.dsm-progress-eta {\n  white-space: nowrap;\n}\n\n.dsm-logs-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  color: var(--dsw-alias-label-primary);\n  font-size: 13px;\n  font-weight: 560;\n}\n\n.dsm-logs-running {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n  font-weight: 400;\n}\n\n.dsm-terminal {\n  min-height: 200px;\n  flex: 1;\n}\n\n.dsm-apply-row {\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n/* \u63D0\u793A\u533A\uFF1A\u9760\u7559\u767D\u4E0E\u5C42\u6B21\u533A\u5206\uFF0C\u4E0D\u753B\u5DE6\u4FA7\u7AD6\u7EBF\u3002 */\n.dsm-note {\n  margin: 0;\n  padding: 11px 13px;\n  border: 1px solid var(--dsw-alias-border-l1);\n  border-radius: 10px;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-bg-layer-2);\n  font-size: 12px;\n  line-height: 1.65;\n}\n\n/* \u91CD\u542F\u63D0\u793A\uFF1A\u6587\u6848\u4E0E\u6309\u94AE\u540C\u884C\uFF0C\u6309\u94AE\u4FDD\u6301\u666E\u901A\u5C3A\u5BF8\u9760\u53F3\uFF0C\u4E0D\u5360\u6EE1\u5BBD\u5EA6\u3002 */\n.dsm-apply-note {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 12px;\n}\n\n.dsm-apply-note > span {\n  min-width: 0;\n}\n\n.dsm-apply-note :global(button) {\n  flex: none;\n  white-space: nowrap;\n}\n\n.dsm-empty {\n  padding: 40px 0;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 13px;\n  text-align: center;\n}\n\n/* ---- \u51B7\u5496\u5561\u4E94\u6A21\u578B\u5DE5\u4F5C\u53F0\uFF1Aprofile \u5361\u7247 ---- */\n.dsm-hub {\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.dsm-hub-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n}\n\n.dsm-card-sub {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n  line-height: 1.5;\n}\n\n/* \u51B7\u5496\u5561\u63D2\u4EF6\u7684\u9879\u76EE\u5730\u5740\uFF1A\u4F4E\u8C03\u53EF\u70B9\uFF0Chover \u63D0\u4EAE\u3002 */\n.dsm-card-link {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 11px;\n  line-height: 1.5;\n  text-decoration: none;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.dsm-card-link:hover {\n  color: var(--dsw-alias-brand-primary);\n  text-decoration: underline;\n}\n\n.dsm-card-patterns {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 11px;\n  line-height: 1.5;\n}\n\n.dsm-card-side {\n  display: flex;\n  flex: none;\n  flex-direction: column;\n  align-items: flex-end;\n  gap: 8px;\n}\n\n/* Reverify\uFF1A\u6574\u5361\u6539\u6210\u300C\u72B6\u6001 \u2192 \u6E05\u5355 \u2192 \u7F3A\u4EF6\u624D\u51FA\u6309\u94AE\u300D\uFF0C\u907F\u514D\u53F3\u4E0A\u89D2\u6C38\u8FDC\u6302\u7740\u5B89\u88C5\u3002 */\n.dsm-card-stack {\n  flex-direction: column;\n  align-items: stretch;\n  gap: 12px;\n}\n\n.dsm-card-stack .dsm-actions {\n  justify-content: flex-end;\n}\n\n.dsm-cap-list {\n  display: grid;\n  gap: 6px;\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n.dsm-cap {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  padding: 8px 10px;\n  border-radius: 8px;\n  background: var(--dsw-alias-bg-layer-2);\n}\n\n.dsm-cap-body {\n  display: flex;\n  min-width: 0;\n  flex: 1;\n  flex-direction: column;\n  gap: 2px;\n}\n\n.dsm-cap-name {\n  color: var(--dsw-alias-label-primary);\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.dsm-cap-note {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 11px;\n  line-height: 1.4;\n}\n\n.dsm-cap-mark {\n  flex: none;\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 11px;\n}\n\n.dsm-cap-mark[data-on] {\n  color: var(--dsw-alias-label-primary);\n}\n\n/* ---- \u8F93\u5165\u6846\u91CC\u7684\u51B7\u5496\u5561\u7834\u7532\u5F00\u5173\uFF08conversation.input.left\uFF09 ---- */\n.dsm-composer-toggle {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n  line-height: 18px;\n  white-space: nowrap;\n}\n\n.dsm-composer-toggle[data-on] {\n  color: var(--dsw-alias-label-primary);\n}\n\n.dsm-toggle-switch {\n  position: relative;\n  box-sizing: border-box;\n  width: 30px;\n  height: 18px;\n  padding: 0;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 999px;\n  background: var(--dsw-alias-bg-layer-3);\n  cursor: pointer;\n  transition: background-color .18s ease, border-color .18s ease;\n  flex: none;\n}\n\n.dsm-toggle-switch:disabled {\n  cursor: default;\n  opacity: .55;\n}\n\n.dsm-composer-toggle[data-on] .dsm-toggle-switch {\n  border-color: var(--dsw-alias-brand-primary);\n  background: var(--dsw-alias-brand-primary);\n}\n\n.dsm-toggle-knob {\n  position: absolute;\n  top: 2px;\n  left: 2px;\n  width: 12px;\n  height: 12px;\n  border-radius: 50%;\n  background: var(--dsw-alias-bg-layer-1);\n  box-shadow: 0 1px 2px rgba(0, 0, 0, .25);\n  transition: transform .18s ease;\n}\n\n.dsm-composer-toggle[data-on] .dsm-toggle-knob {\n  transform: translateX(12px);\n}\n\n.dsm-toggle-label {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  max-width: 180px;\n  white-space: nowrap;\n}\n\n/* \u300C\u51B7\u5496\u5561\u300D\u53E3\u4EE4\uFF1A\u70B9\u51FB\u590D\u5236\u3002\u56FE\u6807\u63D0\u793A\u53EF\u70B9\uFF0C\u590D\u5236\u6210\u529F\u77ED\u6682\u53D8\u8272\u3002 */\n.dsm-phrase-copy {\n  display: inline-flex;\n  align-items: center;\n  gap: 3px;\n  padding: 0 2px;\n  border: 0;\n  border-radius: 4px;\n  background: transparent;\n  color: inherit;\n  font: inherit;\n  cursor: pointer;\n  transition: color .15s ease;\n}\n\n.dsm-phrase-copy:hover {\n  color: var(--dsw-alias-label-primary);\n}\n\n.dsm-phrase-copy svg {\n  opacity: .6;\n}\n\n.dsm-phrase-copy:hover svg {\n  opacity: 1;\n}\n\n.dsm-phrase-copy[data-copied] {\n  color: var(--dsw-alias-brand-primary);\n}\n\n.dsm-phrase-copy[data-copied] svg {\n  opacity: 1;\n}\n\n.dsm-copy-toast {\n  position: fixed;\n  top: 18px;\n  left: 50%;\n  transform: translateX(-50%);\n  z-index: 2147483647;\n  padding: 10px 18px;\n  border-radius: 10px;\n  background: rgba(20, 20, 20, .92);\n  color: #fff;\n  font-size: 13px;\n  line-height: 1.4;\n  box-shadow: 0 8px 24px rgba(0, 0, 0, .25);\n  pointer-events: none;\n}\n\n.dsm-copy-toast-err {\n  background: rgba(180, 40, 40, .94);\n}\n\n.dsm-toggle-error {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: 14px;\n  height: 14px;\n  border-radius: 50%;\n  color: var(--dsw-alias-label-primary-foreground);\n  background: var(--dsw-alias-risk-danger);\n  font-size: 10px;\n  font-weight: 700;\n  flex: none;\n}\n\n.dsm-runtime {\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.dsm-runtime-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 12px;\n}\n\n.dsm-plugin-row {\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n\n/* \u5168\u5C40\u9ED8\u8BA4\u5F00\u5173\uFF1A\u9760\u53F3\u4E0E\u72B6\u6001\u6307\u793A\u5206\u5F00\uFF0C\u989C\u8272\u4ECD\u8D70\u8BED\u4E49\u4EE4\u724C\u3002 */\n.dsm-default-toggle {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  margin-left: auto;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  font-size: 12px;\n  user-select: none;\n}\n\n.dsm-default-toggle input {\n  width: 14px;\n  height: 14px;\n  accent-color: var(--dsw-alias-label-primary);\n  cursor: pointer;\n}\n\n.dsm-default-toggle:hover {\n  color: var(--dsw-alias-label-primary);\n}\n\n/* \u603B\u5F00\u5173\u4E0E\u9010\u6A21\u578B\u8BBE\u7F6E\u7684\u5173\u7CFB\u8BF4\u660E\uFF0C\u7D27\u8DDF\u5728\u72B6\u6001\u884C\u4E0B\u65B9\u3002 */\n.dsm-hub-hint {\n  margin: 0 0 12px;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n  line-height: 1.6;\n}\n\n.dsm-mode-row {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 8px;\n}\n\n.dsm-mode-chip {\n  padding: 5px 10px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 999px;\n  background: var(--dsw-alias-bg-layer-2);\n  color: var(--dsw-alias-label-secondary);\n  font: inherit;\n  font-size: 12px;\n  cursor: pointer;\n}\n\n.dsm-mode-chip:hover {\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n\n/* \u6697\u8272\u4E0B brand-primary \u4F1A\u7FFB\u6210\u6D45\u586B\u5145\uFF0C\u5FC5\u987B\u7528 on-fill \u5B57\u8272\uFF0C\n   \u4E0D\u80FD\u7528 label-on-accent/#fff\uFF08\u53D8\u91CF\u4E0D\u5B58\u5728\uFF0C\u767D\u5E95\u767D\u5B57\uFF09\u3002 */\n.dsm-mode-chip[data-on] {\n  border-color: var(--dsw-alias-button-primary-fill);\n  background: var(--dsw-alias-button-primary-fill);\n  color: var(--dsw-alias-label-primary-foreground);\n  font-weight: 600;\n}\n\n.dsm-mode-chip[data-on]:hover {\n  background: var(--dsw-alias-button-primary-hover);\n  border-color: var(--dsw-alias-button-primary-hover);\n  color: var(--dsw-alias-label-primary-foreground);\n}\n\n.dsm-mode-hint {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 12px;\n  line-height: 1.5;\n  min-width: 0;\n  flex: 1 1 220px;\n}\n\n.dsm-pentagi-controls {\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n\n.dsm-pentagi-controls .dsm-default-toggle {\n  margin-left: 0;\n}\n\n.dsm-pentagi-port {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 12px;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n}\n\n.dsm-pentagi-port input,\n.dsm-pentagi-port select {\n  width: auto;\n  min-width: 88px;\n  max-width: 240px;\n  padding: 6px 8px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 8px;\n  background: var(--dsw-alias-bg-layer-2);\n  color: var(--dsw-alias-label-primary);\n  font: inherit;\n}\n";
+var client_default = "/* \u684C\u9762\u7BA1\u7406\u9875\u6837\u5F0F\u3002\n   \u53EA\u4F7F\u7528 ui-theme \u771F\u5B9E\u5B9A\u4E49\u7684 --dsw-* \u8BED\u4E49\u4EE4\u724C\uFF1A\u6DF1\u6D45\u4E3B\u9898\u5207\u6362\u65F6\u81EA\u52A8\u7FFB\u8F6C\uFF0C\n   \u4E0D\u51FA\u73B0\u4EFB\u4F55\u5B57\u9762\u8272\u503C\u3002\u547D\u540D\u7EDF\u4E00\u52A0 dsm- \u524D\u7F00\uFF0C\u907F\u514D\u4E0E\u5BBF\u4E3B\u6837\u5F0F\u76F8\u649E\u3002 */\n\n.dsm-root {\n  display: flex;\n  height: 100%;\n  flex-direction: column;\n  gap: 20px;\n  padding: 4px 2px;\n}\n\n.dsm-head h2 {\n  margin: 0 0 6px;\n  color: var(--dsw-alias-label-primary);\n  font-size: 18px;\n  font-weight: 650;\n  letter-spacing: -.01em;\n}\n\n.dsm-head p {\n  margin: 0;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 13px;\n  line-height: 1.6;\n}\n\n.dsm-list {\n  display: grid;\n  gap: 10px;\n}\n\n/* \u63D2\u4EF6\u5361\u7247\uFF1A\u4E0E\u8BBE\u7F6E\u9762\u677F\u5176\u5B83\u533A\u5757\u540C\u4E00\u5957\u5706\u89D2\u4E0E\u63CF\u8FB9\u8282\u594F\u3002 */\n.dsm-card {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 16px;\n  padding: 14px 16px;\n  border: 1px solid var(--dsw-alias-border-l1);\n  border-radius: 12px;\n  background: var(--dsw-alias-bg-layer-1);\n}\n\n.dsm-card-main {\n  display: flex;\n  min-width: 0;\n  flex-direction: column;\n  gap: 5px;\n}\n\n.dsm-card-title {\n  color: var(--dsw-alias-label-primary);\n  font-size: 14px;\n  font-weight: 600;\n}\n\n.dsm-card-id {\n  margin-left: 6px;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n  font-weight: 400;\n}\n\n/* \u72B6\u6001\u884C\u7528 StateDot \u7EC4\u4EF6\u8868\u8FBE\u8BED\u4E49\u8272\uFF0C\u4E0D\u7528\u5F69\u8272\u6587\u5B57\u3001\u66F4\u4E0D\u7528\u8868\u60C5\u3002 */\n.dsm-state {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n}\n\n.dsm-actions {\n  display: flex;\n  flex: none;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.dsm-action-group {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 8px;\n}\n\n.dsm-action-group + .dsm-action-group {\n  padding-left: 12px;\n  border-left: 1px solid var(--dsw-alias-border-l1);\n}\n\n@media (max-width: 560px) {\n  .dsm-action-group + .dsm-action-group {\n    padding-left: 0;\n    border-left: 0;\n  }\n}\n\n.dsm-logs {\n  display: flex;\n  min-height: 0;\n  flex: 1;\n  flex-direction: column;\n  gap: 8px;\n}\n\n/* \u5B89\u88C5/\u542F\u52A8\u8FDB\u5EA6\u6761\uFF1A\u767E\u5206\u6BD4 + \u6B65\u9AA4 + \u9884\u8BA1\u8017\u65F6\u3002 */\n.dsm-progress {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  padding: 10px 12px;\n  border: 1px solid var(--dsw-alias-border-l1);\n  border-radius: 10px;\n  background: var(--dsw-alias-bg-layer-2);\n}\n\n.dsm-progress-bar {\n  height: 8px;\n  overflow: hidden;\n  border-radius: 999px;\n  background: var(--dsw-alias-bg-layer-3);\n}\n\n.dsm-progress-fill {\n  height: 100%;\n  border-radius: 999px;\n  background: var(--dsw-alias-accent, var(--dsw-alias-label-primary));\n  transition: width 0.4s ease;\n}\n\n.dsm-progress-meta {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n}\n\n.dsm-progress-label {\n  min-width: 0;\n  flex: 1;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.dsm-progress-pct {\n  color: var(--dsw-alias-label-primary);\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.dsm-progress-eta {\n  white-space: nowrap;\n}\n\n.dsm-logs-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  color: var(--dsw-alias-label-primary);\n  font-size: 13px;\n  font-weight: 560;\n}\n\n.dsm-logs-running {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n  font-weight: 400;\n}\n\n.dsm-terminal {\n  min-height: 200px;\n  flex: 1;\n}\n\n.dsm-apply-row {\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n/* \u63D0\u793A\u533A\uFF1A\u9760\u7559\u767D\u4E0E\u5C42\u6B21\u533A\u5206\uFF0C\u4E0D\u753B\u5DE6\u4FA7\u7AD6\u7EBF\u3002 */\n.dsm-note {\n  margin: 0;\n  padding: 11px 13px;\n  border: 1px solid var(--dsw-alias-border-l1);\n  border-radius: 10px;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-bg-layer-2);\n  font-size: 12px;\n  line-height: 1.65;\n}\n\n/* \u91CD\u542F\u63D0\u793A\uFF1A\u6587\u6848\u4E0E\u6309\u94AE\u540C\u884C\uFF0C\u6309\u94AE\u4FDD\u6301\u666E\u901A\u5C3A\u5BF8\u9760\u53F3\uFF0C\u4E0D\u5360\u6EE1\u5BBD\u5EA6\u3002 */\n.dsm-apply-note {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 12px;\n}\n\n.dsm-apply-note > span {\n  min-width: 0;\n}\n\n.dsm-apply-note :global(button) {\n  flex: none;\n  white-space: nowrap;\n}\n\n.dsm-empty {\n  padding: 40px 0;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 13px;\n  text-align: center;\n}\n\n/* ---- \u51B7\u5496\u5561\u4E94\u6A21\u578B\u5DE5\u4F5C\u53F0\uFF1Aprofile \u5361\u7247 ---- */\n.dsm-hub {\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.dsm-hub-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n}\n\n.dsm-card-sub {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n  line-height: 1.5;\n}\n\n/* \u51B7\u5496\u5561\u63D2\u4EF6\u7684\u9879\u76EE\u5730\u5740\uFF1A\u4F4E\u8C03\u53EF\u70B9\uFF0Chover \u63D0\u4EAE\u3002 */\n.dsm-card-link {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 11px;\n  line-height: 1.5;\n  text-decoration: none;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.dsm-card-link:hover {\n  color: var(--dsw-alias-brand-primary);\n  text-decoration: underline;\n}\n\n.dsm-card-patterns {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 11px;\n  line-height: 1.5;\n}\n\n.dsm-card-side {\n  display: flex;\n  flex: none;\n  flex-direction: column;\n  align-items: flex-end;\n  gap: 8px;\n}\n\n/* Reverify\uFF1A\u6574\u5361\u6539\u6210\u300C\u72B6\u6001 \u2192 \u6E05\u5355 \u2192 \u7F3A\u4EF6\u624D\u51FA\u6309\u94AE\u300D\uFF0C\u907F\u514D\u53F3\u4E0A\u89D2\u6C38\u8FDC\u6302\u7740\u5B89\u88C5\u3002 */\n.dsm-card-stack {\n  flex-direction: column;\n  align-items: stretch;\n  gap: 12px;\n}\n\n.dsm-card-stack .dsm-actions {\n  justify-content: flex-end;\n}\n\n.dsm-cap-list {\n  display: grid;\n  gap: 6px;\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n.dsm-cap {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  padding: 8px 10px;\n  border-radius: 8px;\n  background: var(--dsw-alias-bg-layer-2);\n}\n\n.dsm-cap-body {\n  display: flex;\n  min-width: 0;\n  flex: 1;\n  flex-direction: column;\n  gap: 2px;\n}\n\n.dsm-cap-name {\n  color: var(--dsw-alias-label-primary);\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.dsm-cap-note {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 11px;\n  line-height: 1.4;\n}\n\n.dsm-cap-mark {\n  flex: none;\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 11px;\n}\n\n.dsm-cap-mark[data-on] {\n  color: var(--dsw-alias-label-primary);\n}\n\n/* ---- \u8F93\u5165\u6846\u91CC\u7684\u51B7\u5496\u5561\u7834\u7532\u5F00\u5173\uFF08conversation.input.left\uFF09 ---- */\n.dsm-composer-toggle {\n  display: inline-flex;\n  align-items: center;\n  align-self: center;\n  gap: 6px;\n  box-sizing: border-box;\n  flex: none;\n  flex-shrink: 0;\n  height: 28px;\n  margin-inline: 4px;\n  padding: 0 8px 0 6px;\n  border: 0;\n  border-radius: 24px;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 13px;\n  font-weight: 500;\n  line-height: 20px;\n  white-space: nowrap;\n}\n\n.dsm-composer-toggle:hover {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n\n.dsm-composer-toggle[data-on] {\n  color: var(--dsw-alias-label-primary);\n}\n\n.dsm-toggle-switch {\n  position: relative;\n  box-sizing: border-box;\n  width: 28px;\n  height: 16px;\n  padding: 0;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 999px;\n  background: var(--dsw-alias-bg-layer-3);\n  cursor: pointer;\n  transition: background-color .18s ease, border-color .18s ease;\n  flex: none;\n}\n\n.dsm-toggle-switch:disabled {\n  cursor: default;\n  opacity: .55;\n}\n\n.dsm-composer-toggle[data-on] .dsm-toggle-switch {\n  border-color: var(--dsw-alias-brand-primary);\n  background: var(--dsw-alias-brand-primary);\n}\n\n.dsm-toggle-knob {\n  position: absolute;\n  top: 1px;\n  left: 1px;\n  width: 12px;\n  height: 12px;\n  border-radius: 50%;\n  background: var(--dsw-alias-bg-layer-1);\n  box-shadow: 0 1px 2px rgba(0, 0, 0, .25);\n  transition: transform .18s ease;\n}\n\n.dsm-composer-toggle[data-on] .dsm-toggle-knob {\n  transform: translateX(12px);\n}\n\n.dsm-toggle-label {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  max-width: 180px;\n  white-space: nowrap;\n}\n\n.dsm-toggle-profile {\n  flex: none;\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 12px;\n  font-weight: 500;\n  line-height: 20px;\n  white-space: nowrap;\n}\n\n.dsm-composer-toggle[data-on] .dsm-toggle-profile {\n  color: var(--dsw-alias-label-secondary);\n}\n\n/* \u300C\u51B7\u5496\u5561\u300D\u53E3\u4EE4\uFF1A\u70B9\u51FB\u590D\u5236\u3002\u56FE\u6807\u63D0\u793A\u53EF\u70B9\uFF0C\u590D\u5236\u6210\u529F\u77ED\u6682\u53D8\u8272\u3002 */\n.dsm-phrase-copy {\n  display: inline-flex;\n  align-items: center;\n  gap: 3px;\n  padding: 0 2px;\n  border: 0;\n  border-radius: 4px;\n  background: transparent;\n  color: inherit;\n  font: inherit;\n  cursor: pointer;\n  transition: color .15s ease;\n}\n\n.dsm-phrase-copy:hover {\n  color: var(--dsw-alias-label-primary);\n}\n\n.dsm-phrase-copy svg {\n  opacity: .6;\n}\n\n.dsm-phrase-copy:hover svg {\n  opacity: 1;\n}\n\n.dsm-phrase-copy[data-copied] {\n  color: var(--dsw-alias-brand-primary);\n}\n\n.dsm-phrase-copy[data-copied] svg {\n  opacity: 1;\n}\n\n.dsm-copy-toast {\n  position: fixed;\n  top: 18px;\n  left: 50%;\n  transform: translateX(-50%);\n  z-index: 2147483647;\n  padding: 10px 18px;\n  border-radius: 10px;\n  background: rgba(20, 20, 20, .92);\n  color: #fff;\n  font-size: 13px;\n  line-height: 1.4;\n  box-shadow: 0 8px 24px rgba(0, 0, 0, .25);\n  pointer-events: none;\n}\n\n.dsm-copy-toast-err {\n  background: rgba(180, 40, 40, .94);\n}\n\n.dsm-toggle-error {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: 14px;\n  height: 14px;\n  border-radius: 50%;\n  color: var(--dsw-alias-label-primary-foreground);\n  background: var(--dsw-alias-risk-danger);\n  font-size: 10px;\n  font-weight: 700;\n  flex: none;\n}\n\n.dsm-runtime {\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.dsm-runtime-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 12px;\n}\n\n.dsm-plugin-row {\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n\n/* \u5168\u5C40\u9ED8\u8BA4\u5F00\u5173\uFF1A\u9760\u53F3\u4E0E\u72B6\u6001\u6307\u793A\u5206\u5F00\uFF0C\u989C\u8272\u4ECD\u8D70\u8BED\u4E49\u4EE4\u724C\u3002 */\n.dsm-default-toggle {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  margin-left: auto;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  font-size: 12px;\n  user-select: none;\n}\n\n.dsm-default-toggle input {\n  width: 14px;\n  height: 14px;\n  accent-color: var(--dsw-alias-label-primary);\n  cursor: pointer;\n}\n\n.dsm-default-toggle:hover {\n  color: var(--dsw-alias-label-primary);\n}\n\n/* \u603B\u5F00\u5173\u4E0E\u9010\u6A21\u578B\u8BBE\u7F6E\u7684\u5173\u7CFB\u8BF4\u660E\uFF0C\u7D27\u8DDF\u5728\u72B6\u6001\u884C\u4E0B\u65B9\u3002 */\n.dsm-hub-hint {\n  margin: 0 0 12px;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n  line-height: 1.6;\n}\n\n.dsm-mode-row {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 8px;\n}\n\n.dsm-mode-chip {\n  padding: 5px 10px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 999px;\n  background: var(--dsw-alias-bg-layer-2);\n  color: var(--dsw-alias-label-secondary);\n  font: inherit;\n  font-size: 12px;\n  cursor: pointer;\n}\n\n.dsm-mode-chip:hover {\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n\n/* \u6697\u8272\u4E0B brand-primary \u4F1A\u7FFB\u6210\u6D45\u586B\u5145\uFF0C\u5FC5\u987B\u7528 on-fill \u5B57\u8272\uFF0C\n   \u4E0D\u80FD\u7528 label-on-accent/#fff\uFF08\u53D8\u91CF\u4E0D\u5B58\u5728\uFF0C\u767D\u5E95\u767D\u5B57\uFF09\u3002 */\n.dsm-mode-chip[data-on] {\n  border-color: var(--dsw-alias-button-primary-fill);\n  background: var(--dsw-alias-button-primary-fill);\n  color: var(--dsw-alias-label-primary-foreground);\n  font-weight: 600;\n}\n\n.dsm-mode-chip[data-on]:hover {\n  background: var(--dsw-alias-button-primary-hover);\n  border-color: var(--dsw-alias-button-primary-hover);\n  color: var(--dsw-alias-label-primary-foreground);\n}\n\n.dsm-mode-hint {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 12px;\n  line-height: 1.5;\n  min-width: 0;\n  flex: 1 1 220px;\n}\n\n.dsm-pentagi-controls {\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n\n.dsm-pentagi-controls .dsm-default-toggle {\n  margin-left: 0;\n}\n\n.dsm-pentagi-port {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 12px;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 12px;\n}\n\n.dsm-pentagi-port input,\n.dsm-pentagi-port select {\n  width: auto;\n  min-width: 88px;\n  max-width: 240px;\n  padding: 6px 8px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 8px;\n  background: var(--dsw-alias-bg-layer-2);\n  color: var(--dsw-alias-label-primary);\n  font: inherit;\n}\n";
 
 // packages/dsh-desktop-manager/src/client.tsx
 var import_jsx_runtime = require("react/jsx-runtime");
+var primitives = null;
+try {
+  primitives = require("@deepseek-ai/dsh-client-ui-primitives");
+} catch {
+  primitives = null;
+}
+function Button(props) {
+  if (primitives?.Button) return (0, import_react.createElement)(primitives.Button, props);
+  return (0, import_react.createElement)("button", {
+    type: "button",
+    onClick: props.onClick,
+    disabled: props.disabled,
+    className: "dsm-fallback-btn"
+  }, props.children);
+}
+function StateDot(props) {
+  if (primitives?.StateDot) return (0, import_react.createElement)(primitives.StateDot, props);
+  return (0, import_react.createElement)("span", { className: "dsm-fallback-dot", "data-state": props.state });
+}
+function TerminalBlock(props) {
+  if (primitives?.TerminalBlock) return (0, import_react.createElement)(primitives.TerminalBlock, props);
+  return (0, import_react.createElement)("pre", { className: "dsm-fallback-term" }, String(props.output ?? ""));
+}
+function Toast(props) {
+  if (primitives?.Toast) return (0, import_react.createElement)(primitives.Toast, props);
+  return (0, import_react.createElement)("div", { className: "dsm-fallback-toast" }, props.text);
+}
 var TERMINAL_LABELS = {
   signal: (signal) => `\u4FE1\u53F7 ${signal}`,
   exitCode: (exitCode) => `\u9000\u51FA ${exitCode}`,
@@ -74,7 +110,7 @@ function writeClipboard(text) {
   }
 }
 var name = "dsh-desktop-manager";
-var inject = ["slots", "locale", "connection", "modelDirectories"];
+var inject = ["slots", "connection"];
 function matchProfileId(modelName) {
   const name2 = String(modelName ?? "").toLowerCase();
   const rules = {
@@ -88,22 +124,6 @@ function matchProfileId(modelName) {
     if (patterns.some((pattern) => name2.includes(pattern))) return id;
   }
   return "deepseek";
-}
-function sessionIdOf(zone) {
-  if (typeof zone === "string") return zone;
-  if (!zone || typeof zone !== "object") return "";
-  const record = zone;
-  return record.session?.sessionId || record.sessionId || "";
-}
-function selectionLabel(current, groups) {
-  const model = String(current?.model ?? "").trim();
-  const provider = String(current?.provider ?? "").trim();
-  if (groups) {
-    const group = groups.find((item) => item.id === provider);
-    const named = group?.models?.find((item) => item.id === model)?.name;
-    if (named) return `${named} ${model} ${provider} ${group?.name ?? ""}`;
-  }
-  return `${model} ${provider}`;
 }
 var PROFILE_LABELS = {
   codex: "GPT-5.6/Codex",
@@ -119,187 +139,6 @@ var PROFILE_MATCH_HINTS = {
   glm: "2.1.0 \u5E2D\u4F4D \xB7 \u7834\u7532\u8D8A\u72F1\u4E0E\u8D8A\u754C\u91CD\u5199 \xB7 \u5339\u914D GLM\u3001ChatGLM\u3001\u667A\u8C31",
   deepseek: "2.1.0 \u5E2D\u4F4D \xB7 \u6DF1\u5EA6\u63A8\u7406\u4E0E\u4F1A\u8BDD\u5BFC\u51FA \xB7 \u5339\u914D DeepSeek"
 };
-var PROFILE_WAKE = {
-  codex: "[[ENI:PROFILE=MAX]]",
-  claude: "[[CB:MAX]]",
-  grok: "[[ENI:PROFILE=MAX]]",
-  glm: "BREAK//OPEN",
-  deepseek: "BREAK//OPEN"
-};
-var REVERIFY_WAKE = "[[RV:VERIFY]]";
-var PENTAGI_WAKE = "[[PG:OPEN]]";
-function wakePhraseFor(profileId, mode) {
-  if (mode === "reverify") return REVERIFY_WAKE;
-  if (mode === "pentagi") return PENTAGI_WAKE;
-  return PROFILE_WAKE[profileId] ?? PROFILE_WAKE.deepseek;
-}
-function modeLabel(mode) {
-  return mode === "reverify" ? "Reverify" : mode === "pentagi" ? "PentAGI" : "\u51B7\u5496\u5561";
-}
-function ColdBrewToggle({ sessionId, session, useSession, directory, loadDirectory, input, inputActions }) {
-  const [enabled, setEnabled] = (0, import_react.useState)(null);
-  const [mode, setMode] = (0, import_react.useState)("pentagi");
-  const [busy, setBusy] = (0, import_react.useState)(false);
-  const [error, setError] = (0, import_react.useState)(null);
-  const [copied, setCopied] = (0, import_react.useState)(false);
-  const [notice, setNotice] = (0, import_react.useState)(null);
-  const copiedTimer = (0, import_react.useRef)(null);
-  const sessionSnap = useSession?.() ?? session;
-  const newSession = sessionSnap == null || sessionSnap.blank !== false;
-  const snapshot = (0, import_react.useSyncExternalStore)(
-    (fn) => directory?.subscribe?.(fn) ?? (() => {
-    }),
-    () => directory?.getSnapshot?.() ?? null,
-    () => null
-  );
-  (0, import_react.useEffect)(() => {
-    loadDirectory?.();
-    const timer = setInterval(() => loadDirectory?.(), snapshot?.current?.model ? 4e3 : 400);
-    return () => clearInterval(timer);
-  }, [loadDirectory, sessionId, snapshot?.current?.model]);
-  const current = snapshot?.current ?? null;
-  const model = selectionLabel(current, snapshot?.groups);
-  const profileId = matchProfileId(model);
-  const profileLabel = current?.model || current?.provider ? PROFILE_LABELS[profileId] ?? profileId : "";
-  const wakePhrase = wakePhraseFor(profileId, mode);
-  (0, import_react.useEffect)(() => {
-    let alive = true;
-    const pull = () => {
-      const params = new URLSearchParams();
-      if (current?.model) params.set("model", current.model);
-      if (current?.provider) params.set("provider", current.provider);
-      if (newSession) params.set("blank", "1");
-      const query = params.toString() ? `?${params}` : "";
-      fetch(`/api/coldbrew/session/${encodeURIComponent(sessionId)}${query}`).then((res) => res.json()).then((data) => {
-        if (!alive) return;
-        setEnabled(data.enabled === true);
-        if (data.mode === "reverify" || data.mode === "pentagi" || data.mode === "coldbrew") setMode(data.mode);
-      }).catch(() => {
-      });
-    };
-    pull();
-    if (!newSession) return () => {
-      alive = false;
-    };
-    const timer = setInterval(pull, 1500);
-    return () => {
-      alive = false;
-      clearInterval(timer);
-    };
-  }, [sessionId, current?.model, current?.provider, newSession]);
-  const toggle = async (next) => {
-    if (!newSession || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/coldbrew/session/${encodeURIComponent(sessionId)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: next, model, mode })
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
-      setEnabled(data.enabled === true);
-      if (data.mode === "reverify" || data.mode === "pentagi" || data.mode === "coldbrew") setMode(data.mode);
-    } catch (reason) {
-      setError(reason?.message ?? String(reason));
-    } finally {
-      setBusy(false);
-    }
-  };
-  const on = enabled === true;
-  const flashNotice = (text, ok) => {
-    setNotice({ text, ok });
-    if (copiedTimer.current !== null) clearTimeout(copiedTimer.current);
-    copiedTimer.current = setTimeout(() => {
-      setNotice(null);
-      setCopied(false);
-    }, 1800);
-  };
-  const fillComposer = (0, import_react.useCallback)(() => {
-    const current2 = String(input?.draft ?? "");
-    if (current2.trim() !== "") return;
-    try {
-      inputActions?.setDraft(wakePhrase);
-    } catch {
-    }
-  }, [input, inputActions, wakePhrase]);
-  const copyPhrase = (0, import_react.useCallback)(async () => {
-    if (on) {
-      setCopied(true);
-      setError(null);
-      flashNotice(`${profileLabel} \xB7 ${modeLabel(mode)} \u5DF2\u5F00\uFF0C\u76F4\u63A5\u53D1\u4EFB\u52A1`, true);
-      return;
-    }
-    const okCopy = () => {
-      setCopied(true);
-      setError(null);
-      fillComposer();
-      flashNotice(`\u5DF2\u586B\u5165 ${profileLabel} \u53EF\u9009\u53E3\u4EE4\u300C${wakePhrase}\u300D`, true);
-    };
-    try {
-      await navigator.clipboard.writeText(wakePhrase);
-      okCopy();
-      return;
-    } catch {
-    }
-    if (writeClipboard(wakePhrase)) {
-      okCopy();
-      return;
-    }
-    fillComposer();
-    setError("\u590D\u5236\u5931\u8D25");
-    flashNotice("\u590D\u5236\u5931\u8D25\uFF0C\u5DF2\u586B\u5165\u8F93\u5165\u6846", false);
-  }, [fillComposer, wakePhrase, profileLabel, on, mode]);
-  (0, import_react.useEffect)(() => () => {
-    if (copiedTimer.current !== null) clearTimeout(copiedTimer.current);
-  }, []);
-  (0, import_react.useEffect)(() => {
-    if (notice === null) return;
-    const el = document.createElement("div");
-    el.className = notice.ok ? "dsm-copy-toast" : "dsm-copy-toast dsm-copy-toast-err";
-    el.textContent = notice.text;
-    document.body.appendChild(el);
-    return () => {
-      el.remove();
-    };
-  }, [notice]);
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dsm-composer-toggle", "data-on": on || void 0, "data-new": newSession || void 0, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-      "button",
-      {
-        type: "button",
-        className: "dsm-toggle-switch",
-        role: "switch",
-        "aria-checked": on,
-        "aria-label": mode === "reverify" ? "Reverify \u5B57\u8282\u88C1\u5224" : mode === "pentagi" ? "PentAGI \u6E17\u900F\u7F16\u6392" : "\u51B7\u5496\u5561\u7834\u7532",
-        disabled: !newSession || busy,
-        title: newSession ? on ? `\u5173\u95ED${modeLabel(mode)}` : `\u5F00\u542F${modeLabel(mode)}` : "\u4EC5\u65B0\u4F1A\u8BDD\u53EF\u8C03\u6574",
-        onClick: () => void toggle(!on),
-        children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dsm-toggle-knob" })
-      }
-    ),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "dsm-toggle-label", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
-        "button",
-        {
-          type: "button",
-          className: "dsm-phrase-copy",
-          title: on ? `${profileLabel} \xB7 ${modeLabel(mode)} \u5DF2\u5F00\uFF0C\u76F4\u63A5\u53D1\u4EFB\u52A1` : `\u5F00\u5173\u5173\u95ED\u65F6\u53EF\u9009\u53E3\u4EE4\u300C${wakePhrase}\u300D`,
-          "aria-label": on ? `${profileLabel} \xB7 ${modeLabel(mode)} \u5DF2\u5F00` : `\u590D\u5236 ${profileLabel} \u53EF\u9009\u53E3\u4EE4 ${wakePhrase}`,
-          "data-copied": copied || void 0,
-          onClick: () => void copyPhrase(),
-          children: [
-            modeLabel(mode),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.IconCopyOutline16, { size: 12 })
-          ]
-        }
-      ),
-      on && profileLabel ? ` \xB7 ${profileLabel}` : ""
-    ] }),
-    error !== null && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dsm-toggle-error", title: error, children: "!" })
-  ] });
-}
 function engineIsNative(slot) {
   const engine = slot?.engine;
   return Boolean(engine && engine !== "pure-python" && engine !== "none");
@@ -410,13 +249,13 @@ function ReverifyCard(props) {
         /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dsm-card-id", children: "0.9.0" })
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "dsm-state", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.StateDot, { state: view.tone, size: 8 }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(StateDot, { state: view.tone, size: 8 }),
         view.headline
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dsm-card-sub", children: view.detail })
     ] }),
     /* @__PURE__ */ (0, import_jsx_runtime.jsx)("ul", { className: "dsm-cap-list", children: view.rows.map((row) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { className: "dsm-cap", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.StateDot, { state: row.ok ? "done" : "warning", size: 8 }),
+      /* @__PURE__ */ (0, import_jsx_runtime.jsx)(StateDot, { state: row.ok ? "done" : "warning", size: 8 }),
       /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dsm-cap-body", children: [
         /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dsm-cap-name", children: row.name }),
         /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dsm-cap-note", children: row.note })
@@ -424,9 +263,9 @@ function ReverifyCard(props) {
       /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dsm-cap-mark", "data-on": row.ok || void 0, children: row.ok ? "\u5DF2\u88C5" : "\u672A\u88C5" })
     ] }, row.name)) }),
     showActions && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dsm-actions", children: [
-      view.needPython && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.Button, { onClick: props.onProbe, disabled: props.busy, variant: "primary", size: "sm", children: "\u91CD\u65B0\u63A2\u6D4B" }),
+      view.needPython && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { onClick: props.onProbe, disabled: props.busy, variant: "primary", size: "sm", children: "\u91CD\u65B0\u63A2\u6D4B" }),
       view.needFidelity && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-        import_dsh_client_ui_primitives.Button,
+        Button,
         {
           onClick: () => props.onInstall("full"),
           disabled: props.busy,
@@ -436,7 +275,7 @@ function ReverifyCard(props) {
         }
       ),
       view.needAngr && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-        import_dsh_client_ui_primitives.Button,
+        Button,
         {
           onClick: () => props.onInstall("angr"),
           disabled: props.busy,
@@ -459,6 +298,7 @@ function describePentagi(status) {
   const sandboxOn = status?.sandbox?.enabled !== false;
   const sandboxReady = status?.sandbox?.ok === true;
   const dindOn = status?.sandbox?.dind?.enabled === true;
+  const probingExtras = status?.light === true && !sandboxReady;
   if (status === null) {
     return {
       tone: "warning",
@@ -487,18 +327,18 @@ function describePentagi(status) {
     {
       name: "Kali \u6C99\u7BB1",
       ok: sandboxOn && sandboxReady,
-      note: !sandboxOn ? "\u5DF2\u5173\u95ED \xB7 pg_terminal \u8D70\u672C\u673A shell" : sandboxReady ? `${status.sandbox?.image ?? "vxcontrol/kali-linux"} \xB7 ${status.sandbox?.inspect ?? "\u5DF2 pull"}` : `\u672A pull \xB7 docker pull ${status.sandbox?.image ?? "vxcontrol/kali-linux"}`
+      note: !sandboxOn ? "\u5DF2\u5173\u95ED \xB7 pg_terminal \u8D70\u672C\u673A shell" : sandboxReady ? `${status.sandbox?.image ?? "vxcontrol/kali-linux"} \xB7 ${status.sandbox?.inspect ?? "\u5DF2 pull"}` : probingExtras ? "\u955C\u50CF\u63A2\u6D4B\u4E2D\u2026" : `\u672A pull \xB7 docker pull ${status.sandbox?.image ?? "vxcontrol/kali-linux"}`
     },
     {
       name: "DinD",
       ok: dindOn && sandboxReady,
-      note: dindOn ? status.sandbox?.dind?.note ?? "Kali \u5185 docker CLI \u6302 VM sock" : "\u5173\u95ED \xB7 Kali \u91CC\u6CA1\u6709 docker daemon"
+      note: !dindOn ? "\u5173\u95ED \xB7 Kali \u91CC\u6CA1\u6709 docker daemon" : sandboxReady ? status.sandbox?.dind?.note ?? "Kali \u5185 docker CLI \u6302 VM sock" : probingExtras ? "\u968F Kali \u955C\u50CF\u63A2\u6D4B\u4E2D\u2026" : "Kali \u955C\u50CF\u672A\u5C31\u7EEA"
     },
     { name: "\u7F16\u6392\u5185\u6838", ok: true, note: "\u968F\u6A21\u5F0F\u6CE8\u5165\uFF0C\u65E0\u9700\u5B89\u88C5" },
     {
       name: "\u5411\u91CF\u68C0\u7D22",
       ok: source === "local" ? localOk : source === "api" ? Boolean(status.embedding?.hasKey && status.embedding?.apiUrl) : false,
-      note: source === "local" ? localOk ? `\u672C\u673A sidecar :${status.embedding?.port ?? 63229} \xB7 ${status.embedding?.model ?? "bge-small"}` : "\u672C\u673A\u672A\u542F\u52A8\uFF08\u7EA6 0.5GB\uFF0C\u70B9\u4E0B\u9762\u542F\u52A8\uFF09" : source === "api" ? status.embedding?.apiUrl ? `\u72EC\u7ACB API \xB7 ${status.embedding.apiModel || "text-embedding-3-small"}` : "\u5DF2\u9009\u72EC\u7ACB API\uFF0C\u4F46\u8FD8\u6CA1\u586B\u5730\u5740" : "\u5173\u95ED \xB7 \u4E0E\u8C03\u5EA6\u6A21\u578B\u5206\u5F00\uFF0C\u4E0D\u5360\u5185\u5B58"
+      note: source === "local" ? localOk ? `\u672C\u673A sidecar :${status.embedding?.port ?? 63229} \xB7 ${status.embedding?.model ?? "bge-small"}` : status.embedding?.local?.skipped ? "\u6B63\u5728\u62C9\u8D77\u672C\u673A sidecar\u2026" : "\u672C\u673A\u672A\u542F\u52A8\uFF08\u7EA6 0.5GB\uFF0C\u70B9\u4E0B\u9762\u542F\u52A8\uFF09" : source === "api" ? status.embedding?.apiUrl ? `\u72EC\u7ACB API \xB7 ${status.embedding.apiModel || "text-embedding-3-small"}` : "\u5DF2\u9009\u72EC\u7ACB API\uFF0C\u4F46\u8FD8\u6CA1\u586B\u5730\u5740" : "\u5173\u95ED \xB7 \u4E0E\u8C03\u5EA6\u6A21\u578B\u5206\u5F00\uFF0C\u4E0D\u5360\u5185\u5B58"
     }
   ];
   if (status.backendReady) {
@@ -528,14 +368,14 @@ function PentagiCard(props) {
         /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dsm-card-id", children: "\u5B88\u62A4\u8FDB\u7A0B \xB7 API" })
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "dsm-state", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.StateDot, { state: view.tone, size: 8 }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(StateDot, { state: view.tone, size: 8 }),
         view.headline
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dsm-card-sub", children: view.detail }),
       props.status?.root ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dsm-card-link", children: props.status.root }) : null
     ] }),
     /* @__PURE__ */ (0, import_jsx_runtime.jsx)("ul", { className: "dsm-cap-list", children: view.rows.map((row) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { className: "dsm-cap", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.StateDot, { state: row.ok ? "done" : "warning", size: 8 }),
+      /* @__PURE__ */ (0, import_jsx_runtime.jsx)(StateDot, { state: row.ok ? "done" : "warning", size: 8 }),
       /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dsm-cap-body", children: [
         /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dsm-cap-name", children: row.name }),
         /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dsm-cap-note", children: row.note })
@@ -703,19 +543,19 @@ function PentagiCard(props) {
     ] }),
     /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dsm-actions", children: [
       /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dsm-action-group", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.Button, { onClick: props.onProbe, disabled: props.busy, variant: "outline", size: "sm", children: "\u91CD\u65B0\u63A2\u6D4B" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.Button, { onClick: props.onInstallAll, disabled: props.busy, variant: "primary", size: "sm", children: props.busy ? "\u6B63\u5728\u5B89\u88C5\u5168\u90E8\u2026" : "\u5B89\u88C5\u5168\u90E8\u540E\u7AEF" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.Button, { onClick: props.onUninstallAll, disabled: props.busy, variant: "outline", size: "sm", children: props.busy ? "\u6B63\u5728\u5378\u8F7D\u2026" : "\u5378\u8F7D\u5168\u90E8\u540E\u7AEF" })
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { onClick: props.onProbe, disabled: props.busy, variant: "outline", size: "sm", children: "\u91CD\u65B0\u63A2\u6D4B" }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { onClick: props.onInstallAll, disabled: props.busy, variant: "primary", size: "sm", children: props.busy ? "\u6B63\u5728\u5B89\u88C5\u5168\u90E8\u2026" : "\u5B89\u88C5\u5168\u90E8\u540E\u7AEF" }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { onClick: props.onUninstallAll, disabled: props.busy, variant: "outline", size: "sm", children: props.busy ? "\u6B63\u5728\u5378\u8F7D\u2026" : "\u5378\u8F7D\u5168\u90E8\u540E\u7AEF" })
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dsm-action-group", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.Button, { onClick: props.onInstallDocker, disabled: props.busy, variant: "outline", size: "sm", children: props.busy ? "\u6B63\u5728\u5B89\u88C5 Docker\u2026" : props.status?.docker?.ok && props.status?.docker?.daemon ? "\u91CD\u88C5/\u4FEE\u590D Docker \u4F9D\u8D56" : "\u5B89\u88C5 Docker \u4F9D\u8D56" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.Button, { onClick: props.onStart, disabled: props.busy, variant: "primary", size: "sm", children: props.busy ? "\u6B63\u5728\u542F\u52A8\u2026" : running ? "\u91CD\u65B0\u542F\u52A8\u540E\u7AEF" : "\u542F\u52A8\u540E\u7AEF" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.Button, { onClick: props.onStop, disabled: props.busy || !running, variant: "outline", size: "sm", children: props.busy ? "\u6B63\u5728\u505C\u6B62\u2026" : "\u505C\u6B62\u540E\u7AEF" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.Button, { onClick: props.onSyncModels, disabled: props.busy, variant: "outline", size: "sm", children: props.busy ? "\u6B63\u5728\u540C\u6B65\u2026" : "\u540C\u6B65 Harness \u6A21\u578B" })
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { onClick: props.onInstallDocker, disabled: props.busy, variant: "outline", size: "sm", children: props.busy ? "\u6B63\u5728\u5B89\u88C5 Docker\u2026" : props.status?.docker?.ok && props.status?.docker?.daemon ? "\u91CD\u88C5/\u4FEE\u590D Docker \u4F9D\u8D56" : "\u5B89\u88C5 Docker \u4F9D\u8D56" }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { onClick: props.onStart, disabled: props.busy, variant: "primary", size: "sm", children: props.busy ? "\u6B63\u5728\u542F\u52A8\u2026" : running ? "\u91CD\u65B0\u542F\u52A8\u540E\u7AEF" : "\u542F\u52A8\u540E\u7AEF" }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { onClick: props.onStop, disabled: props.busy || !running, variant: "outline", size: "sm", children: props.busy ? "\u6B63\u5728\u505C\u6B62\u2026" : "\u505C\u6B62\u540E\u7AEF" }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { onClick: props.onSyncModels, disabled: props.busy, variant: "outline", size: "sm", children: props.busy ? "\u6B63\u5728\u540C\u6B65\u2026" : "\u540C\u6B65 Harness \u6A21\u578B" })
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dsm-action-group", children: [
-        embeddingSource === "local" && !localEmbedOn && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.Button, { onClick: () => props.onEmbedder("start"), disabled: props.busy, variant: "primary", size: "sm", children: props.busy ? "\u6B63\u5728\u5B89\u88C5/\u542F\u52A8\u2026" : props.status?.embedding?.fastembed?.ok ? "\u542F\u52A8\u672C\u673A\u5411\u91CF" : "\u5B89\u88C5\u5E76\u542F\u52A8\u672C\u673A\u5411\u91CF" }),
-        embeddingSource === "local" && localEmbedOn && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.Button, { onClick: () => props.onEmbedder("stop"), disabled: props.busy, variant: "outline", size: "sm", children: props.busy ? "\u6B63\u5728\u505C\u6B62\u2026" : "\u505C\u6B62\u672C\u673A\u5411\u91CF" })
+        embeddingSource === "local" && !localEmbedOn && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { onClick: () => props.onEmbedder("start"), disabled: props.busy, variant: "primary", size: "sm", children: props.busy ? "\u6B63\u5728\u5B89\u88C5/\u542F\u52A8\u2026" : props.status?.embedding?.fastembed?.ok ? "\u542F\u52A8\u672C\u673A\u5411\u91CF" : "\u5B89\u88C5\u5E76\u542F\u52A8\u672C\u673A\u5411\u91CF" }),
+        embeddingSource === "local" && localEmbedOn && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { onClick: () => props.onEmbedder("stop"), disabled: props.busy, variant: "outline", size: "sm", children: props.busy ? "\u6B63\u5728\u505C\u6B62\u2026" : "\u505C\u6B62\u672C\u673A\u5411\u91CF" })
       ] })
     ] })
   ] });
@@ -752,27 +592,46 @@ function PentagiSection() {
     if (pollTimer.current) clearInterval(pollTimer.current);
     pollTimer.current = setInterval(fetchLogs, 500);
   }, [fetchLogs]);
-  const refresh = (0, import_react.useCallback)(async () => {
-    setLoading(true);
+  const refresh = (0, import_react.useCallback)(async (opts = {}) => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 8e3);
     try {
-      const [profilesRes, modelsRes] = await Promise.all([
-        fetch("/api/coldbrew/profiles"),
-        fetch("/api/coldbrew/pentagi/models")
-      ]);
-      const profilesData = await profilesRes.json();
-      const modelsData = await modelsRes.json().catch(() => ({}));
-      setPentagi({
-        ...profilesData.pentagi ?? {},
-        ...modelsData.harness ? { harness: modelsData.harness, harnessProvider: modelsData.harnessProvider } : {}
-      });
+      const res = await fetch(opts.full ? "/api/coldbrew/pentagi?full=1" : "/api/coldbrew/pentagi", { signal: controller.signal });
+      const data = await res.json().catch(() => ({}));
+      setPentagi((prev) => ({ ...prev ?? {}, ...data }));
     } catch (error) {
       console.error("Failed to fetch pentagi status", error);
+      setPentagi((prev) => prev ?? {
+        version: "1.0.0",
+        error: error instanceof Error ? error.message : "\u63A2\u6D4B\u8D85\u65F6",
+        docker: { ok: false },
+        api: { ok: false, url: "https://127.0.0.1:8443" },
+        backendReady: false
+      });
     } finally {
+      window.clearTimeout(timer);
       setLoading(false);
+    }
+    if (!opts.full) {
+      fetch("/api/coldbrew/pentagi/models").then(async (res) => {
+        const modelsData = await res.json().catch(() => ({}));
+        setPentagi((prev) => {
+          const incoming = modelsData.harness;
+          const keep = incoming?.providers?.length ? incoming : prev?.harness;
+          return {
+            ...prev ?? {},
+            ...modelsData,
+            ...keep ? { harness: keep, harnessProvider: modelsData.harnessProvider || prev?.harnessProvider } : {}
+          };
+        });
+      }).catch(() => {
+      });
     }
   }, []);
   (0, import_react.useEffect)(() => {
-    refresh();
+    refresh().then(() => {
+      void refresh({ full: true });
+    });
     return () => {
       if (pollTimer.current) clearInterval(pollTimer.current);
     };
@@ -818,7 +677,7 @@ function PentagiSection() {
       showToast(`\u540C\u6B65\u5931\u8D25: ${error.message}`);
     } finally {
       setBusy(false);
-      await refresh();
+      await refresh({ full: true });
     }
   };
   const startPentagi = async () => {
@@ -840,7 +699,7 @@ function PentagiSection() {
         pollTimer.current = null;
       }
       setBusy(false);
-      await refresh();
+      await refresh({ full: true });
     }
   };
   const runningLooksLikeDocker = (data) => data.runningTask === "docker-install";
@@ -867,7 +726,7 @@ function PentagiSection() {
         pollTimer.current = null;
       }
       setBusy(false);
-      await refresh();
+      await refresh({ full: true });
     }
   };
   const uninstallAllPentagi = async () => {
@@ -893,7 +752,7 @@ function PentagiSection() {
         pollTimer.current = null;
       }
       setBusy(false);
-      await refresh();
+      await refresh({ full: true });
     }
   };
   const installDocker = async () => {
@@ -921,7 +780,7 @@ function PentagiSection() {
         pollTimer.current = null;
       }
       setBusy(false);
-      await refresh();
+      await refresh({ full: true });
     }
   };
   const runEmbedder = async (op) => {
@@ -948,7 +807,7 @@ function PentagiSection() {
         pollTimer.current = null;
       }
       setBusy(false);
-      await refresh();
+      await refresh({ full: true });
     }
   };
   const stopPentagi = async () => {
@@ -970,12 +829,12 @@ function PentagiSection() {
         pollTimer.current = null;
       }
       setBusy(false);
-      await refresh();
+      await refresh({ full: true });
     }
   };
   if (loading && pentagi === null) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "dsm-empty", children: "\u6B63\u5728\u52A0\u8F7D PentAGI\u2026" });
   return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dsm-root", children: [
-    toast !== null && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.Toast, { text: toast.text, onDone: () => setToast(null) }, toast.seq),
+    toast !== null && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Toast, { text: toast.text, onDone: () => setToast(null) }, toast.seq),
     /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dsm-head", children: [
       /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", { children: "PentAGI" }),
       /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "\u5B98\u65B9 compose \u5B88\u62A4\u8FDB\u7A0B\u3001GraphQL \u901A\u884C\u8BC1\u3001Kali \u6C99\u7BB1\u548C\u8C03\u5EA6\u6A21\u578B\u3002\u7834\u7532\u6A21\u5F0F\u4ECD\u5728\u300C\u7834\u7532\u7BA1\u7406\u300D\u91CC\u5207\u6362\u3002" })
@@ -986,7 +845,7 @@ function PentagiSection() {
         status: pentagi,
         busy,
         onProbe: () => {
-          void refresh();
+          void refresh({ full: true });
         },
         onStart: () => {
           void startPentagi();
@@ -1041,7 +900,7 @@ function PentagiSection() {
         ] })
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-        import_dsh_client_ui_primitives.TerminalBlock,
+        TerminalBlock,
         {
           className: "dsm-terminal",
           command: "PentAGI \u540E\u7AEF",
@@ -1102,7 +961,7 @@ function ManagerSection() {
       setProfiles(profilesData.profiles ?? []);
       setDefaultOn(profilesData.defaultEnabled === true);
       setArmorMode(profilesData.armorMode === "reverify" ? "reverify" : profilesData.armorMode === "pentagi" ? "pentagi" : "coldbrew");
-      setReverify(profilesData.reverify ?? null);
+      if (profilesData.reverify && profilesData.reverify.skipped !== true) setReverify(profilesData.reverify);
       const statusData = await statusRes.json();
       setStatus(statusData);
       setOnline(true);
@@ -1110,6 +969,11 @@ function ManagerSection() {
         setBusy(true);
         startPolling();
       }
+      fetch("/api/coldbrew/reverify").then(async (res) => {
+        const data = await res.json().catch(() => null);
+        if (data) setReverify(data);
+      }).catch(() => {
+      });
     } catch (error) {
       console.error("Failed to fetch status", error);
       setOnline(false);
@@ -1179,7 +1043,7 @@ function ManagerSection() {
       }
       setInstallingExtra(null);
       setBusy(false);
-      await refresh();
+      await refresh({ full: true });
     }
   };
   const setProfileDefault = async (profileId, defaultEnabled) => {
@@ -1221,7 +1085,7 @@ function ManagerSection() {
       if (Array.isArray(payload.logs) && payload.logs.length > 0) setLogs(payload.logs);
       if (!res.ok) throw new Error(payload.error || bodyText || `HTTP ${res.status}`);
       showToast(type === "install" ? "\u51B7\u5496\u5561 Zero \u5DF2\u5C31\u7EEA" : type === "uninstall" ? "\u5DF2\u505C\u7528\u51B7\u5496\u5561 Zero" : "\u8BBE\u7F6E\u5DF2\u66F4\u65B0");
-      await refresh();
+      await refresh({ full: true });
     } catch (error) {
       showToast(`\u64CD\u4F5C\u5931\u8D25: ${error.message}`);
     } finally {
@@ -1236,12 +1100,12 @@ function ManagerSection() {
   const pluginState = !status.installed ? "error" : status.enabled ? "done" : "warning";
   const pluginStateText = !status.installed ? "\u5C1A\u672A\u5B89\u88C5" : status.enabled ? "\u5DF2\u542F\u7528" : "\u5DF2\u7981\u7528";
   return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dsm-root", children: [
-    toast !== null && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.Toast, { text: toast.text, onDone: () => setToast(null) }, toast.seq),
+    toast !== null && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Toast, { text: toast.text, onDone: () => setToast(null) }, toast.seq),
     /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dsm-hub", children: [
       /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dsm-hub-head", children: [
         /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "dsm-state", children: [
           /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-            import_dsh_client_ui_primitives.StateDot,
+            StateDot,
             {
               state: online === null ? "warning" : online ? "done" : "error",
               size: 8
@@ -1251,7 +1115,7 @@ function ManagerSection() {
           online === null ? "\u68C0\u67E5\u4E2D\u2026" : online ? "\u8FD0\u884C\u4E2D" : "\u8FDE\u63A5\u5931\u8D25"
         ] }),
         busy && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "dsm-state", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.StateDot, { state: "ongoing", size: 8 }),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(StateDot, { state: "ongoing", size: 8 }),
           "\u4EFB\u52A1\u6267\u884C\u4E2D"
         ] }),
         /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "dsm-default-toggle", children: [
@@ -1312,7 +1176,7 @@ function ManagerSection() {
       ] }),
       status.installed && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dsm-note dsm-apply-note", children: [
         /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "\u66F4\u6539\u63D2\u4EF6\u542F\u7528\u72B6\u6001\u6216\u5B89\u88C5\u65B0\u63D2\u4EF6\u540E\uFF0C\u9700\u8981\u91CD\u542F\u540E\u7AEF\u670D\u52A1\uFF0C\u7CFB\u7EDF\u63D0\u793A\u8BCD\u624D\u4F1A\u91CD\u65B0\u52A0\u8F7D\u3002" }),
-        !busy && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.Button, { onClick: () => action("restart"), variant: "primary", size: "sm", children: "\u91CD\u542F\u5E94\u7528" })
+        !busy && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { onClick: () => action("restart"), variant: "primary", size: "sm", children: "\u91CD\u542F\u5E94\u7528" })
       ] }),
       !defaultOn && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "dsm-hub-hint", children: "\u4E0B\u9762\u53EF\u4EE5\u6309\u6A21\u578B\u5355\u72EC\u8BBE\u7F6E\uFF1A\u53EA\u6709\u65B0\u4F1A\u8BDD\u7528\u5230\u8BE5\u6A21\u578B\u65F6\uFF0C\u624D\u81EA\u52A8\u5F00\u542F\u7834\u7532\u3002" }),
       /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "dsm-list", children: (profiles ?? []).map((profile) => {
@@ -1335,11 +1199,11 @@ function ManagerSection() {
           ] }),
           /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dsm-card-side", children: [
             /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "dsm-state", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.StateDot, { state, size: 8 }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(StateDot, { state, size: 8 }),
               defaultOn ? "\u5DF2\u7531\u603B\u5F00\u5173\u5F00\u542F" : profile.defaultEnabled ? "\u7528\u6B64\u6A21\u578B\u65F6\u9ED8\u8BA4\u5F00\u542F" : "\u7528\u6B64\u6A21\u578B\u65F6\u4E0D\u81EA\u52A8\u5F00\u542F"
             ] }),
             /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "dsm-actions", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-              import_dsh_client_ui_primitives.Button,
+              Button,
               {
                 onClick: () => void setProfileDefault(profile.id, !profile.defaultEnabled),
                 disabled: busy || defaultOn,
@@ -1385,13 +1249,13 @@ function ManagerSection() {
             }
           ),
           /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "dsm-state", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.StateDot, { state: pluginState, size: 8 }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(StateDot, { state: pluginState, size: 8 }),
             pluginStateText
           ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "dsm-actions", children: !status.installed ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.Button, { onClick: () => action("install"), disabled: busy, variant: "primary", size: "sm", children: "\u4E00\u952E\u5B89\u88C5" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.Button, { onClick: () => action("toggle"), disabled: busy, variant: "primary", size: "sm", children: status.enabled ? "\u7981\u7528\u63D2\u4EF6" : "\u542F\u7528\u63D2\u4EF6" }),
-          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.Button, { onClick: () => action("uninstall"), disabled: busy, variant: "outline", size: "sm", children: "\u5F7B\u5E95\u5378\u8F7D" })
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "dsm-actions", children: !status.installed ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { onClick: () => action("install"), disabled: busy, variant: "primary", size: "sm", children: "\u4E00\u952E\u5B89\u88C5" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { onClick: () => action("toggle"), disabled: busy, variant: "primary", size: "sm", children: status.enabled ? "\u7981\u7528\u63D2\u4EF6" : "\u542F\u7528\u63D2\u4EF6" }),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { onClick: () => action("uninstall"), disabled: busy, variant: "outline", size: "sm", children: "\u5F7B\u5E95\u5378\u8F7D" })
         ] }) })
       ] })
     ] }),
@@ -1401,7 +1265,7 @@ function ManagerSection() {
         busy && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dsm-logs-running", children: "\u6B63\u5728\u6267\u884C\u2026" })
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-        import_dsh_client_ui_primitives.TerminalBlock,
+        TerminalBlock,
         {
           className: "dsm-terminal",
           command: "\u684C\u9762\u7BA1\u7406\u4EFB\u52A1",
@@ -1415,11 +1279,19 @@ function ManagerSection() {
 }
 function apply(ctx) {
   installStyles();
-  ctx.effect(() => ctx.locale.register(NS, {
-    zh: { "nav": "\u7834\u7532\u7BA1\u7406", "pentagiNav": "PentAGI" },
-    en: { "nav": "Jailbreak", "pentagiNav": "PentAGI" }
-  }), "dsh-desktop-manager: dictionaries");
-  const t = ctx.locale.bind(NS);
+  const locale = optionalService(ctx, "locale");
+  const modelDirectories = optionalService(ctx, "modelDirectories");
+  void modelDirectories;
+  try {
+    if (locale?.register) {
+      ctx.effect(() => locale.register(NS, {
+        zh: { "nav": "\u7834\u7532\u7BA1\u7406", "pentagiNav": "PentAGI" },
+        en: { "nav": "Jailbreak", "pentagiNav": "PentAGI" }
+      }), "dsh-desktop-manager: dictionaries");
+    }
+  } catch {
+  }
+  const t = locale?.bind ? locale.bind(NS) : (key) => key === "nav" ? "\u7834\u7532\u7BA1\u7406" : key === "pentagiNav" ? "PentAGI" : key;
   ctx.slots.inject("settings.section", () => ctx.slots.register({
     name: "settings.section",
     id: "desktop-manager",
@@ -1436,31 +1308,196 @@ function apply(ctx) {
     locale: NS,
     inject: () => ({})
   }, PentagiSection));
-  ctx.slots.inject("conversation.input.left", () => ctx.slots.register({
-    name: "conversation.input.left",
-    id: "coldbrew-toggle",
-    order: 10,
-    locale: NS,
-    inject: (sessionId) => {
-      const id = sessionIdOf(sessionId);
-      try {
-        if (!id) return { directory: null, loadDirectory: () => {
-        } };
-        const directory = ctx.modelDirectories?.directoryFor(id);
-        if (directory === void 0) return { directory: null, loadDirectory: () => {
-        } };
-        const loadDirectory = () => {
-          directory.load?.().catch(() => {
-          });
-        };
-        loadDirectory();
-        return { directory: directory.store, loadDirectory };
-      } catch {
-        return { directory: null, loadDirectory: () => {
-        } };
+  installComposerToggle(ctx);
+  function installComposerToggle(_ctx) {
+    const PROFILE_WAKE = {
+      grok: "[[ENI:PROFILE=MAX]]",
+      claude: "[[CB:MAX]]",
+      glm: "BREAK//OPEN",
+      deepseek: "BREAK//OPEN",
+      codex: "[[ENI:PROFILE=MAX]]"
+    };
+    const state = {
+      enabled: false,
+      mode: "pentagi",
+      profileId: "grok",
+      busy: false,
+      sessionId: "",
+      model: ""
+    };
+    const modeLabel = (mode) => mode === "reverify" ? "Reverify" : mode === "pentagi" ? "PentAGI" : "\u51B7\u5496\u5561";
+    const profileLabel = (id) => PROFILE_LABELS[id] ?? id;
+    const wakePhrase = () => state.mode === "reverify" ? "[[RV:VERIFY]]" : state.mode === "pentagi" ? "[[PG:OPEN]]" : PROFILE_WAKE[state.profileId] ?? "BREAK//OPEN";
+    const visible = (el) => {
+      if (!(el instanceof HTMLElement)) return false;
+      const s = getComputedStyle(el);
+      if (s.display === "none" || s.visibility === "hidden") return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 8 && r.height > 8;
+    };
+    const findToolsRow = () => {
+      const rows = Array.from(document.querySelectorAll('[class*="_tools"]'));
+      return rows.find((el) => visible(el) && /完全权限|记忆/.test(el.textContent || "")) ?? null;
+    };
+    const currentModel = () => {
+      const slot = document.querySelector('[data-slot="conversation.input.model"]');
+      const raw = String(slot?.textContent ?? "").replace(/\s+/g, " ").trim();
+      const cleaned = raw.replace(/PentAGI|冷咖啡|Reverify/gi, "").replace(/^[·\s]+|[·\s]+$/g, "").replace(/\s+/g, " ").trim();
+      return cleaned;
+    };
+    const shortModel = (raw) => {
+      const text = String(raw ?? "").replace(/\s+/g, " ").trim();
+      return text || profileLabel(state.profileId);
+    };
+    const currentSessionId = () => {
+      const href = location.href;
+      const fromPath = href.match(/\/(?:session|s|chat)\/([^/?#]+)/i)?.[1];
+      if (fromPath) return decodeURIComponent(fromPath);
+      const hash = location.hash.match(/(?:session|s)=([^&]+)/i)?.[1];
+      if (hash) return decodeURIComponent(hash);
+      const query = new URLSearchParams(location.search).get("session");
+      if (query) return query;
+      const attr = document.querySelector("[data-session-id]")?.getAttribute("data-session-id");
+      if (attr) return attr;
+      const selected = document.querySelector('[aria-current="page"], [aria-selected="true"]');
+      const key = selected?.getAttribute("data-session-id") || selected?.getAttribute("data-id");
+      if (key) return key;
+      return `dom-${encodeURIComponent(location.pathname + location.hash) || "current"}`;
+    };
+    const toast = (text, ok = true) => {
+      const el = document.createElement("div");
+      el.className = ok ? "dsm-copy-toast" : "dsm-copy-toast dsm-copy-toast-err";
+      el.textContent = text;
+      document.body.appendChild(el);
+      window.setTimeout(() => el.remove(), 1600);
+    };
+    const paint = (root) => {
+      const on = state.enabled;
+      if (on) root.setAttribute("data-on", "");
+      else root.removeAttribute("data-on");
+      const sw = root.querySelector(".dsm-toggle-switch");
+      const label = root.querySelector(".dsm-toggle-label");
+      const extra = root.querySelector(".dsm-toggle-profile");
+      if (sw) {
+        sw.setAttribute("aria-checked", on ? "true" : "false");
+        sw.disabled = state.busy;
+        sw.title = on ? `\u5173\u95ED${modeLabel(state.mode)}` : `\u5F00\u542F${modeLabel(state.mode)}`;
       }
-    }
-  }, ColdBrewToggle));
+      if (label) label.textContent = modeLabel(state.mode);
+      if (extra) extra.textContent = on ? ` \xB7 ${shortModel(state.model)}` : "";
+      root.title = on ? `${shortModel(state.model)} \xB7 ${modeLabel(state.mode)} \u5DF2\u5F00` : `\u5F00\u542F\u540E\u6309\u5F53\u524D\u6A21\u578B\u5339\u914D\u7834\u7532\u5E2D\u4F4D`;
+    };
+    const pull = async (root) => {
+      const sessionId = currentSessionId();
+      const model = currentModel();
+      state.sessionId = sessionId;
+      state.model = model;
+      state.profileId = matchProfileId(model);
+      try {
+        const q = new URLSearchParams();
+        if (model) q.set("model", model);
+        q.set("blank", "1");
+        const res = await fetch(`/api/coldbrew/session/${encodeURIComponent(sessionId)}?${q}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        state.enabled = data.enabled === true;
+        if (data.mode === "reverify" || data.mode === "pentagi" || data.mode === "coldbrew") state.mode = data.mode;
+        if (typeof data.profileId === "string" && data.profileId) state.profileId = data.profileId;
+        else state.profileId = matchProfileId(model || data.model);
+      } catch {
+      }
+      paint(root);
+    };
+    const toggle = async (root) => {
+      if (state.busy) return;
+      state.busy = true;
+      paint(root);
+      try {
+        const next = !state.enabled;
+        const res = await fetch(`/api/coldbrew/session/${encodeURIComponent(currentSessionId())}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled: next, model: currentModel(), mode: state.mode })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        state.enabled = data.enabled === true;
+        if (data.mode === "reverify" || data.mode === "pentagi" || data.mode === "coldbrew") state.mode = data.mode;
+        state.profileId = typeof data.profileId === "string" && data.profileId ? data.profileId : matchProfileId(currentModel());
+        toast(state.enabled ? `${profileLabel(state.profileId)} \xB7 ${modeLabel(state.mode)} \u5DF2\u5F00` : `${modeLabel(state.mode)} \u5DF2\u5173`);
+      } catch (err) {
+        toast(err?.message ?? "\u5F00\u5173\u5931\u8D25", false);
+      } finally {
+        state.busy = false;
+        paint(root);
+      }
+    };
+    const copyWake = () => {
+      const phrase = wakePhrase();
+      try {
+        navigator.clipboard.writeText(phrase).catch(() => {
+          writeClipboard(phrase);
+        });
+      } catch {
+        writeClipboard(phrase);
+      }
+      toast(state.enabled ? `${profileLabel(state.profileId)} \xB7 ${modeLabel(state.mode)} \u5DF2\u5F00\uFF0C\u76F4\u63A5\u53D1\u4EFB\u52A1` : `\u5DF2\u590D\u5236 ${profileLabel(state.profileId)} \u53E3\u4EE4 ${phrase}`);
+    };
+    const makePill = () => {
+      const root = document.createElement("div");
+      root.setAttribute("data-dsh-coldbrew-toggle", "");
+      root.className = "dsm-composer-toggle dsm-composer-toggle-dom";
+      root.innerHTML = [
+        '<button type="button" class="dsm-toggle-switch" role="switch" aria-checked="false" aria-label="\u5F00\u542F\u7834\u7532">',
+        '<span class="dsm-toggle-knob"></span>',
+        "</button>",
+        '<button type="button" class="dsm-phrase-copy dsm-toggle-label">PentAGI</button>',
+        '<span class="dsm-toggle-profile"></span>'
+      ].join("");
+      const sw = root.querySelector(".dsm-toggle-switch");
+      const label = root.querySelector(".dsm-toggle-label");
+      sw.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        void toggle(root);
+      });
+      label.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        copyWake();
+      });
+      paint(root);
+      void pull(root);
+      return root;
+    };
+    const mount = () => {
+      const tools = findToolsRow();
+      if (!tools) return false;
+      const existing = tools.querySelector("[data-dsh-coldbrew-toggle]");
+      if (existing && visible(existing)) {
+        void pull(existing);
+        return true;
+      }
+      document.querySelectorAll("[data-dsh-coldbrew-toggle]").forEach((n) => {
+        if (!tools.contains(n)) n.remove();
+      });
+      const pill = makePill();
+      const modes = tools.querySelector('[class*="_modes"]');
+      if (modes?.nextSibling) tools.insertBefore(pill, modes.nextSibling);
+      else tools.appendChild(pill);
+      return visible(pill);
+    };
+    const tick = () => {
+      try {
+        mount();
+      } catch {
+      }
+    };
+    tick();
+    const observer = new MutationObserver(tick);
+    observer.observe(document.body, { childList: true, subtree: true });
+    window.setInterval(tick, 2500);
+  }
 }
 return module.exports; } });
 //# sourceMappingURL=client.js.map

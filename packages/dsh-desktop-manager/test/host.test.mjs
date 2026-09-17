@@ -6,8 +6,9 @@ import { join } from 'node:path'
 
 import { apply, inject, enableArmorSession, matchProfileId, name, settingsFile, normalizeArmorMode } from '../src/index.mjs'
 import { REVERIFY_TOOLS, probeReverify, runReverifyTool, resolveHostPython } from '../src/reverify.mjs'
-import { runPentagiTool, buildSandboxDockerArgs, buildPersistentSandboxCreateArgs, wrapSandboxHostLoopback, SANDBOX_CONTAINER_NAME, flowFilesRestPath, KNOWLEDGE_SEARCH_GQL, SANDBOX_CAP_ADD, formatSpecialistDispatchInput, SPECIALIST_ROLES, generateFlowMarkdown, scraperPublicUrl, buildMultipart, jsonSafe, extractAssistantResult, extractAdviserAdvice, extractSpecialistResult, resolveKnowledgeIds, unwrapDuckDuckGoHref, sandboxHostPath } from '../src/pentagi.mjs'
-import { applyLlmToEnvText, pickHarnessLlm, listHarnessLlmProviders } from '../src/pentagi-providers.mjs'
+import { runPentagiTool, buildSandboxDockerArgs, buildPersistentSandboxCreateArgs, wrapSandboxHostLoopback, SANDBOX_CONTAINER_NAME, flowFilesRestPath, KNOWLEDGE_SEARCH_GQL, SANDBOX_CAP_ADD, formatSpecialistDispatchInput, SPECIALIST_ROLES, generateFlowMarkdown, scraperPublicUrl, buildMultipart, jsonSafe, extractAssistantResult, extractAdviserAdvice, extractSpecialistResult, resolveKnowledgeIds, unwrapDuckDuckGoHref, sandboxHostPath, mapSandboxPath } from '../src/pentagi.mjs'
+import { optionalService } from '../src/optional-service.mjs'
+import { applyLlmToEnvText, pickHarnessLlm, listHarnessLlmProviders, listHarnessSnapshot } from '../src/pentagi-providers.mjs'
 import { parseCredentialsYaml } from '../src/pentagi-credentials.mjs'
 import { pentestImage, whichDocker, pentagiSandboxEnabled, pentagiDindEnabled, pentagiComposeEnv, dockerHost } from '../src/pentagi-runtime.mjs'
 
@@ -263,7 +264,7 @@ test('POST /api/coldbrew/mode persists armorMode under DSH_HOME', async () => {
     const body = JSON.parse(get.result.body)
     assert.equal(body.armorMode, 'reverify')
     assert.equal(body.reverify.version, '0.9.0')
-    assert.equal(body.reverify.present, true)
+    assert.equal(body.reverify.skipped, true)
   } finally {
     isolated.restore()
   }
@@ -727,6 +728,81 @@ test('sandboxHostPath maps Kali /work and /tmp onto $DSH_HOME/pentagi', () => {
   }
 })
 
+test('mapSandboxPath prefers live Kali bind mounts over DSH_HOME', () => {
+  const isolated = isolateHome()
+  try {
+    const env = { DSH_HOME: isolated.home }
+    const live = '/Users/admin/.dsh/pentagi/sandbox-work'
+    assert.equal(
+      mapSandboxPath('/work/dsh-smoke.txt', { '/work': live, '/tmp': '/Users/admin/.dsh/pentagi/sandbox-tmp' }, env),
+      join(live, 'dsh-smoke.txt'),
+    )
+    assert.equal(
+      mapSandboxPath('/work/dsh-smoke.txt', null, env),
+      join(isolated.home, 'pentagi', 'sandbox-work', 'dsh-smoke.txt'),
+    )
+  } finally {
+    isolated.restore()
+  }
+})
+
+test('optionalService swallows cordis without-inject instead of taking down the client tree', () => {
+  const ctx = {
+    get(name) {
+      throw new Error(`cannot get property "${name}" without inject`)
+    },
+  }
+  assert.equal(optionalService(ctx, 'modelDirectories'), undefined)
+  assert.equal(optionalService({}, 'modelDirectories'), undefined)
+  const throwing = new Proxy({ get() { return undefined } }, {
+    get(target, prop, receiver) {
+      if (prop === 'get') return Reflect.get(target, prop, receiver)
+      throw new Error(`cannot get property "${String(prop)}" without inject`)
+    },
+  })
+  assert.equal(optionalService(throwing, 'modelDirectories'), undefined)
+})
+
+test('client apply never reads ctx.modelDirectories as a Cordis property', () => {
+  const src = readFileSync(new URL('../src/client.tsx', import.meta.url), 'utf8')
+  assert.equal(/ctx\.modelDirectories/.test(src), false)
+  assert.equal(/ctx\.locale\./.test(src), false)
+  assert.match(src, /optionalService\(ctx, 'modelDirectories'\)/)
+  assert.match(src, /optionalService\(ctx, 'locale'\)/)
+  assert.match(src, /installComposerToggle/)
+  assert.match(src, /data-dsh-coldbrew-toggle/)
+  assert.equal(/name: 'conversation\.input\.left'/.test(src), false)
+  assert.equal(/name: 'conversation\.input\.right'/.test(src), false)
+})
+
+test('client plugin injects connection+slots like the working memory chip', () => {
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  const inject = pkg.dsh?.client?.inject ?? []
+  assert.deepEqual(inject, ['@deepseek-ai/dsh-client-connection', '@deepseek-ai/dsh-client-ui-slots'])
+  const src = readFileSync(new URL('../src/client.tsx', import.meta.url), 'utf8')
+  assert.match(src, /export const inject = \['slots', 'connection'\]/)
+  assert.equal(/from '@deepseek-ai\/dsh-client-ui-primitives'/.test(src), false)
+  assert.match(src, /require\('@deepseek-ai\/dsh-client-ui-primitives'\)/)
+})
+
+test('pentagi_profiles execute returns lossless JSON', async () => {
+  const tools = []
+  const ctx = {
+    effect(fn) { fn() },
+    systemPrompt: { section() { return () => {} } },
+    tools: { register(tool) { tools.push(tool); return () => {} } },
+    webServer: { register() {} },
+  }
+  apply(withInject(ctx))
+  const tool = tools.find((item) => item.name === 'pentagi_profiles')
+  assert.ok(tool)
+  const payload = await tool.execute()
+  assert.equal(payload.control, 'orchestrate')
+  assert.doesNotThrow(() => JSON.parse(JSON.stringify(payload)))
+  const encoded = JSON.stringify(payload)
+  assert.equal(encoded.includes('undefined'), false)
+})
+
 test('parseCredentialsYaml reads official refs map and flat KEY: value', () => {
   const nested = parseCredentialsYaml([
     'version: 1',
@@ -778,6 +854,21 @@ test('listHarnessLlmProviders reads official refs-nested credentials yaml', () =
     assert.equal(listed[0].hasKey, true)
     assert.equal(listed[0].key, 'sk-nested-from-desktop')
     assert.equal(listed[0].baseURL, 'https://st.wqyhr.com/v1')
+  } finally {
+    isolated.restore()
+  }
+})
+
+test('listHarnessSnapshot lists settings.yaml providers without live probes', () => {
+  const isolated = isolateHome()
+  try {
+    writeFileSync(join(isolated.home, 'settings.yaml'), HARNESS_SETTINGS)
+    writeFileSync(join(isolated.home, '.credentials.yaml'), 'GROK2_API_KEY: sk-listed\n')
+    const snap = listHarnessSnapshot({ DSH_HOME: isolated.home })
+    assert.equal(snap.providers.length, 1)
+    assert.equal(snap.providers[0].id, 'grok2')
+    assert.equal(snap.providers[0].model, 'grok-4.6')
+    assert.equal(snap.pick.id, 'grok2')
   } finally {
     isolated.restore()
   }

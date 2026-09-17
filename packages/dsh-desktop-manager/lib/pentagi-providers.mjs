@@ -323,30 +323,60 @@ export async function syncGraphqlProviders(pick, inspected, env = process.env) {
   }
 }
 
-export async function snapshotHarnessLlms(env = process.env) {
-  const inspected = await inspectHarnessLlms(env)
-  const pick = pickHarnessLlm(inspected, env)
+export function listHarnessSnapshot(env = process.env) {
+  const listed = listHarnessLlmProviders(env)
+  const preferred = preferredId(env)
+  const pick = listed.find(p => preferred !== 'auto' && p.id === preferred) || listed.find(p => p.isDefault) || listed[0]
   return {
-    preferred: preferredId(env),
+    preferred,
     pick: pick && {
       id: pick.id,
       displayName: pick.displayName,
-      model: pick.probe?.model || pick.model,
+      model: pick.model,
       baseURL: pick.baseURL,
       containerURL: containerBaseUrl(pick.baseURL),
-      healthy: pick.healthy,
-      reason: pick.reason,
-      via: pick.probe?.via,
+      healthy: Boolean(pick.hasKey),
+      reason: 'listed',
     },
-    providers: inspected.map(p => ({
+    providers: listed.map(p => ({
       id: p.id,
       displayName: p.displayName,
       model: p.model,
       baseURL: p.baseURL,
-      healthy: p.healthy,
-      error: p.probe?.error,
-      status: p.probe?.status,
+      healthy: Boolean(p.hasKey),
     })),
+  }
+}
+
+export async function snapshotHarnessLlms(env = process.env) {
+  const listed = listHarnessSnapshot(env)
+  try {
+    const inspected = await inspectHarnessLlms(env)
+    const pick = pickHarnessLlm(inspected, env)
+    return {
+      preferred: preferredId(env),
+      pick: pick && {
+        id: pick.id,
+        displayName: pick.displayName,
+        model: pick.probe?.model || pick.model,
+        baseURL: pick.baseURL,
+        containerURL: containerBaseUrl(pick.baseURL),
+        healthy: pick.healthy,
+        reason: pick.reason,
+        via: pick.probe?.via,
+      },
+      providers: inspected.map(p => ({
+        id: p.id,
+        displayName: p.displayName,
+        model: p.model,
+        baseURL: p.baseURL,
+        healthy: p.healthy,
+        error: p.probe?.error,
+        status: p.probe?.status,
+      })),
+    }
+  } catch {
+    return listed
   }
 }
 

@@ -17,7 +17,7 @@ import {
   probeReverify,
   runReverifyTool,
 } from './reverify.mjs'
-import { PENTAGI_TOOLS, runPentagiTool, duckduckgo } from './pentagi.mjs'
+import { PENTAGI_TOOLS, runPentagiTool, duckduckgo, jsonSafe } from './pentagi.mjs'
 import {
   probePentagiRuntime,
   startPentagiRuntime,
@@ -33,7 +33,7 @@ import {
   pentagiComposeEnv,
   whichDocker,
 } from './pentagi-runtime.mjs'
-import { snapshotHarnessLlms, inspectHarnessLlms, pickHarnessLlm, applyLlmToEnvText, syncGraphqlProviders, listHarnessLlmProviders } from './pentagi-providers.mjs'
+import { snapshotHarnessLlms, inspectHarnessLlms, pickHarnessLlm, applyLlmToEnvText, syncGraphqlProviders, listHarnessLlmProviders, listHarnessSnapshot } from './pentagi-providers.mjs'
 import { readHarnessCredentials } from './pentagi-credentials.mjs'
 
 export const name = 'dsh-desktop-manager'
@@ -518,9 +518,9 @@ function spawnProbe(command, args, timeoutMs = 8_000) {
  * 2. 默认 API/UI 地址 https://127.0.0.1:8443 是否可到达（可通过 DSH_PENTAGI_URL 覆盖）。
  * 探测失败只标记字段，不阻断工具调用。
  */
-async function probePentagi() {
+async function probePentagi(opts = {}) {
   try {
-    return await probePentagiRuntime()
+    return await probePentagiRuntime(process.env, { light: opts.light === true })
   } catch (error) {
     return {
       version: PENTAGI_VERSION,
@@ -591,30 +591,45 @@ export function apply(ctx) {
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
     },
     async execute() {
-      const backend = await probePentagi()
-      return {
-        version: PENTAGI_VERSION,
-        control: 'orchestrate',
-        source: PENTAGI_SOURCE,
-        defaultProfile: 'deepseek',
-        backend: {
-          docker: backend?.docker?.ok === true,
-          api: backend?.api?.ok === true,
-          apiStatus: backend?.api?.status ?? null,
-          tokenPresent: backend?.tokenPresent === true,
-          compose: backend?.compose?.running === true,
-          kali: backend?.sandbox?.ok === true,
-          embedding: backend?.embedding?.source ?? 'none',
-          provider: backend?.harnessProvider ?? 'auto',
-          error: backend?.error ?? backend?.api?.error ?? null,
-        },
-        profiles: Object.values(PROFILES).map(profile => ({
-          id: profile.id,
-          name: profile.name,
-          short: profile.short,
-          patterns: profile.patterns,
-          promptChars: loadPromptSync(profile, 'pentagi').length,
-        })),
+      try {
+        let backend
+        try {
+          backend = await probePentagi()
+        } catch (error) {
+          backend = { error: String(error?.message ?? error) }
+        }
+        return jsonSafe({
+          version: PENTAGI_VERSION,
+          control: 'orchestrate',
+          source: PENTAGI_SOURCE,
+          defaultProfile: 'deepseek',
+          backend: {
+            docker: backend?.docker?.ok === true,
+            api: backend?.api?.ok === true,
+            apiStatus: backend?.api?.status ?? null,
+            tokenPresent: backend?.tokenPresent === true,
+            compose: backend?.compose?.running === true,
+            kali: backend?.sandbox?.ok === true,
+            embedding: backend?.embedding?.source ?? 'none',
+            provider: backend?.harnessProvider ?? 'auto',
+            error: backend?.error ?? backend?.api?.error ?? null,
+          },
+          profiles: Object.values(PROFILES).map(profile => ({
+            id: profile.id,
+            name: profile.name,
+            short: profile.short,
+            patterns: profile.patterns,
+            promptChars: loadPromptSync(profile, 'pentagi').length,
+          })),
+        })
+      } catch (error) {
+        return jsonSafe({
+          ok: false,
+          version: PENTAGI_VERSION,
+          control: 'orchestrate',
+          error: String(error?.message ?? error),
+          profiles: [],
+        })
       }
     },
   }), 'dsh-desktop-manager: pentagi profiles tool')
@@ -686,9 +701,17 @@ export function apply(ctx) {
     })()
     if (pentagiCfg.autostart !== false) {
       setTimeout(() => {
-        startPentagiRuntime((line) => {
+        const log = (line) => {
           taskLogs.push(line)
           if (taskLogs.length > 400) taskLogs = taskLogs.slice(-300)
+        }
+        startPentagiRuntime(log).then(async () => {
+          if (String(pentagiCfg.embeddingSource || 'none') === 'local') {
+            log('本机向量已勾选，随 Harness 拉起 sidecar…')
+            await ensureLocalEmbedder(log).catch((error) => {
+              log(`embedder autostart: ${error?.message ?? error}`)
+            })
+          }
         }).catch((error) => {
           taskLogs.push(`pentagi autostart: ${error?.message ?? error}`)
         })
@@ -826,8 +849,8 @@ export function apply(ctx) {
               { id: 'reverify', name: 'Reverify 0.9.0', control: 'bytes-as-judge' },
               { id: 'pentagi', name: 'PentAGI 1.0.0', control: 'orchestrate' },
             ],
-            reverify: await probeReverify(),
-            pentagi: await probePentagi(),
+            reverify: { version: REVERIFY_VERSION, skipped: true },
+            pentagi: await probePentagi({ light: true }),
             profiles: Object.values(PROFILES).map(p => ({
               id: p.id,
               name: p.name,
@@ -903,13 +926,13 @@ export function apply(ctx) {
             return
           }
           if (sub === 'models') {
-            const snap = await snapshotHarnessLlms()
+            const snap = listHarnessSnapshot()
             res.writeHead(200, { 'Content-Type': 'application/json' })
-            res.end(JSON.stringify({ ...await probePentagi(), harness: snap }))
+            res.end(JSON.stringify({ ...await probePentagi({ light: true }), harness: snap }))
             return
           }
           res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify(await probePentagi()))
+          res.end(JSON.stringify(await probePentagi({ light: url.searchParams.get('full') !== '1' })))
           return
         }
         res.writeHead(404)

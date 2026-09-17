@@ -1,6 +1,38 @@
-import React, { useState, useEffect, useCallback, useRef, useSyncExternalStore } from 'react'
-import { Button, IconCopyOutline16, StateDot, TerminalBlock, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
+import React, { useState, useEffect, useCallback, useRef, createElement } from 'react'
+import { optionalService } from './optional-service.mjs'
 import styles from './client.css'
+
+let primitives: any = null
+try {
+  primitives = require('@deepseek-ai/dsh-client-ui-primitives')
+} catch {
+  primitives = null
+}
+
+function Button(props: any) {
+  if (primitives?.Button) return createElement(primitives.Button, props)
+  return createElement('button', {
+    type: 'button',
+    onClick: props.onClick,
+    disabled: props.disabled,
+    className: 'dsm-fallback-btn',
+  }, props.children)
+}
+
+function StateDot(props: any) {
+  if (primitives?.StateDot) return createElement(primitives.StateDot, props)
+  return createElement('span', { className: 'dsm-fallback-dot', 'data-state': props.state })
+}
+
+function TerminalBlock(props: any) {
+  if (primitives?.TerminalBlock) return createElement(primitives.TerminalBlock, props)
+  return createElement('pre', { className: 'dsm-fallback-term' }, String(props.output ?? ''))
+}
+
+function Toast(props: any) {
+  if (primitives?.Toast) return createElement(primitives.Toast, props)
+  return createElement('div', { className: 'dsm-fallback-toast' }, props.text)
+}
 
 const TERMINAL_LABELS = {
   signal: (signal: string) => `信号 ${signal}`,
@@ -19,9 +51,9 @@ const TERMINAL_LABELS = {
 
 /** 0.1.5-rc.2 deleted `@deepseek-ai/dsh-client-runtime`; keep a local shape. */
 type ClientContext = {
-  locale: { register: Function; bind: Function }
+  get?: (name: string) => unknown
+  locale?: { register: Function; bind: Function }
   slots: { inject: Function; register: Function }
-  modelDirectories?: { directoryFor: (sessionId: string) => { store: unknown } }
   effect: Function
 }
 
@@ -55,7 +87,7 @@ function writeClipboard(text: string): boolean {
 }
 
 export const name = 'dsh-desktop-manager'
-export const inject = ['slots', 'locale', 'connection', 'modelDirectories']
+export const inject = ['slots', 'connection']
 function matchProfileId(modelName: string | null | undefined): string {
   const name = String(modelName ?? '').toLowerCase()
   const rules: Record<string, string[]> = {
@@ -104,234 +136,6 @@ const PROFILE_MATCH_HINTS: Record<string, string> = {
   grok: '2.1.0 席位 · 实时信息流与模板 · 匹配 Grok',
   glm: '2.1.0 席位 · 破甲越狱与越界重写 · 匹配 GLM、ChatGLM、智谱',
   deepseek: '2.1.0 席位 · 深度推理与会话导出 · 匹配 DeepSeek',
-}
-
-/* ------------------------------------------------------------------ *
- * 输入框里的「冷咖啡破甲」开关（conversation.input.left 槽位）。
- * 只能在新会话（无任何消息，session.blank === true）时开启/关闭；
- * 开启后按当前选择的模型名自动匹配对应 ColdBrew profile。
- * ------------------------------------------------------------------ */
-
-interface ColdBrewToggleInjected {
-  /** 该会话的模型目录 store；可能为 null（服务不可用/会话未就绪）。 */
-  directory: {
-    getSnapshot(): {
-      current?: { provider?: string; model?: string } | null
-      groups?: readonly { id?: string; name?: string; models?: readonly { id?: string; name?: string }[] }[]
-      status?: string
-    } | null
-    subscribe(fn: () => void): () => void
-  } | null
-  loadDirectory?: () => void
-}
-
-type ColdBrewToggleProps = ColdBrewToggleInjected & {
-  sessionId: string
-  /** InputZone owner share 里的会话快照（含 blank 位）。 */
-  session: { blank?: boolean } | null
-  useSession?: () => { blank?: boolean; sessionId?: string } | null
-  input?: { draft?: string }
-  inputActions?: { setDraft(text: string): void }
-}
-
-/** 可选席位口令，仅在用户主动点击复制时填入；开关开着不必发。 */
-const PROFILE_WAKE: Record<string, string> = {
-  codex: '[[ENI:PROFILE=MAX]]',
-  claude: '[[CB:MAX]]',
-  grok: '[[ENI:PROFILE=MAX]]',
-  glm: 'BREAK//OPEN',
-  deepseek: 'BREAK//OPEN',
-}
-
-const REVERIFY_WAKE = '[[RV:VERIFY]]'
-const PENTAGI_WAKE = '[[PG:OPEN]]'
-
-function wakePhraseFor(profileId: string, mode: string): string {
-  if (mode === 'reverify') return REVERIFY_WAKE
-  if (mode === 'pentagi') return PENTAGI_WAKE
-  return PROFILE_WAKE[profileId] ?? PROFILE_WAKE.deepseek
-}
-
-function modeLabel(mode: string): string {
-  return mode === 'reverify' ? 'Reverify' : mode === 'pentagi' ? 'PentAGI' : '冷咖啡'
-}
-
-function ColdBrewToggle({ sessionId, session, useSession, directory, loadDirectory, input, inputActions }: ColdBrewToggleProps) {
-  const [enabled, setEnabled] = useState<boolean | null>(null)
-  const [mode, setMode] = useState<string>('pentagi')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
-  const [notice, setNotice] = useState<{ text: string; ok: boolean } | null>(null)
-  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const sessionSnap = useSession?.() ?? session
-  const newSession = sessionSnap == null || sessionSnap.blank !== false
-  const snapshot = useSyncExternalStore(
-    (fn) => directory?.subscribe?.(fn) ?? (() => {}),
-    () => directory?.getSnapshot?.() ?? null,
-    () => null,
-  )
-
-  useEffect(() => {
-    loadDirectory?.()
-    const timer = setInterval(() => loadDirectory?.(), snapshot?.current?.model ? 4_000 : 400)
-    return () => clearInterval(timer)
-  }, [loadDirectory, sessionId, snapshot?.current?.model])
-
-  const current = snapshot?.current ?? null
-  const model = selectionLabel(current, snapshot?.groups)
-  const profileId = matchProfileId(model)
-  const profileLabel = (current?.model || current?.provider) ? (PROFILE_LABELS[profileId] ?? profileId) : ''
-  const wakePhrase = wakePhraseFor(profileId, mode)
-
-  // 挂载时读取该会话已持久化的开关状态。新会话没有记录，后端会按
-  // 「新会话默认开启」以及当前模型命中的 profile 决定初值，所以要把 model 带上。
-  useEffect(() => {
-    let alive = true
-    const pull = () => {
-      const params = new URLSearchParams()
-      if (current?.model) params.set('model', current.model)
-      if (current?.provider) params.set('provider', current.provider)
-      if (newSession) params.set('blank', '1')
-      const query = params.toString() ? `?${params}` : ''
-      fetch(`/api/coldbrew/session/${encodeURIComponent(sessionId)}${query}`)
-        .then(res => res.json())
-        .then(data => {
-          if (!alive) return
-          setEnabled(data.enabled === true)
-          if (data.mode === 'reverify' || data.mode === 'pentagi' || data.mode === 'coldbrew') setMode(data.mode)
-        })
-        .catch(() => { /* keep last known mode */ })
-    }
-    pull()
-    if (!newSession) return () => { alive = false }
-    const timer = setInterval(pull, 1500)
-    return () => { alive = false; clearInterval(timer) }
-  }, [sessionId, current?.model, current?.provider, newSession])
-
-  const toggle = async (next: boolean) => {
-    if (!newSession || busy) return
-    setBusy(true)
-    setError(null)
-    try {
-      const res = await fetch(`/api/coldbrew/session/${encodeURIComponent(sessionId)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: next, model, mode }),
-      })
-      if (!res.ok) throw new Error(await res.text())
-      const data = await res.json()
-      setEnabled(data.enabled === true)
-      if (data.mode === 'reverify' || data.mode === 'pentagi' || data.mode === 'coldbrew') setMode(data.mode)
-    } catch (reason: any) {
-      setError(reason?.message ?? String(reason))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const on = enabled === true
-
-  const flashNotice = (text: string, ok: boolean) => {
-    setNotice({ text, ok })
-    if (copiedTimer.current !== null) clearTimeout(copiedTimer.current)
-    copiedTimer.current = setTimeout(() => {
-      setNotice(null)
-      setCopied(false)
-    }, 1800)
-  }
-
-  const fillComposer = useCallback(() => {
-    const current = String(input?.draft ?? '')
-    if (current.trim() !== '') return
-    try {
-      inputActions?.setDraft(wakePhrase)
-    } catch {
-      /* composer 尚未就绪时只走剪贴板 */
-    }
-  }, [input, inputActions, wakePhrase])
-
-  const copyPhrase = useCallback(async () => {
-    if (on) {
-      setCopied(true)
-      setError(null)
-      flashNotice(`${profileLabel} · ${modeLabel(mode)} 已开，直接发任务`, true)
-      return
-    }
-    const okCopy = () => {
-      setCopied(true)
-      setError(null)
-      fillComposer()
-      flashNotice(`已填入 ${profileLabel} 可选口令「${wakePhrase}」`, true)
-    }
-    try {
-      await navigator.clipboard.writeText(wakePhrase)
-      okCopy()
-      return
-    } catch {
-      /* 无 clipboard API 时走 textarea 兜底 */
-    }
-    if (writeClipboard(wakePhrase)) {
-      okCopy()
-      return
-    }
-    fillComposer()
-    setError('复制失败')
-    flashNotice('复制失败，已填入输入框', false)
-  }, [fillComposer, wakePhrase, profileLabel, on, mode])
-
-  useEffect(() => () => {
-    if (copiedTimer.current !== null) clearTimeout(copiedTimer.current)
-  }, [])
-
-  useEffect(() => {
-    if (notice === null) return
-    const el = document.createElement('div')
-    el.className = notice.ok ? 'dsm-copy-toast' : 'dsm-copy-toast dsm-copy-toast-err'
-    el.textContent = notice.text
-    document.body.appendChild(el)
-    return () => { el.remove() }
-  }, [notice])
-
-  return (
-    <div className="dsm-composer-toggle" data-on={on || undefined} data-new={newSession || undefined}>
-      <button
-        type="button"
-        className="dsm-toggle-switch"
-        role="switch"
-        aria-checked={on}
-        aria-label={mode === 'reverify' ? 'Reverify 字节裁判' : mode === 'pentagi' ? 'PentAGI 渗透编排' : '冷咖啡破甲'}
-        disabled={!newSession || busy}
-        title={newSession
-          ? (on
-            ? `关闭${modeLabel(mode)}`
-            : `开启${modeLabel(mode)}`)
-          : '仅新会话可调整'}
-        onClick={() => void toggle(!on)}
-      >
-        <span className="dsm-toggle-knob" />
-      </button>
-      <span className="dsm-toggle-label">
-        <button
-          type="button"
-          className="dsm-phrase-copy"
-          title={on
-            ? `${profileLabel} · ${modeLabel(mode)} 已开，直接发任务`
-            : `开关关闭时可选口令「${wakePhrase}」`}
-          aria-label={on
-            ? `${profileLabel} · ${modeLabel(mode)} 已开`
-            : `复制 ${profileLabel} 可选口令 ${wakePhrase}`}
-          data-copied={copied || undefined}
-          onClick={() => void copyPhrase()}
-        >
-          {modeLabel(mode)}
-          <IconCopyOutline16 size={12} />
-        </button>
-        {on && profileLabel ? ` · ${profileLabel}` : ''}
-      </span>
-      {error !== null && <span className="dsm-toggle-error" title={error}>!</span>}
-    </div>
-  )
 }
 
 /* ------------------------------------------------------------------ *
@@ -567,13 +371,14 @@ interface PentagiStatus {
     dind?: { enabled?: boolean; ok?: boolean; socket?: string; mode?: string; note?: string }
   }
   backendReady?: boolean
+  light?: boolean
   harnessProvider?: string
   embedding?: {
     source?: 'none' | 'local' | 'api'
     apiUrl?: string
     apiModel?: string
     hasKey?: boolean
-    local?: { ok?: boolean; error?: string }
+    local?: { ok?: boolean; error?: string; skipped?: boolean }
     fastembed?: { ok?: boolean }
     port?: number
     model?: string
@@ -597,6 +402,7 @@ function describePentagi(status: PentagiStatus | null) {
   const sandboxOn = status?.sandbox?.enabled !== false
   const sandboxReady = status?.sandbox?.ok === true
   const dindOn = status?.sandbox?.dind?.enabled === true
+  const probingExtras = status?.light === true && !sandboxReady
   if (status === null) {
     return {
       tone: 'warning' as const,
@@ -635,21 +441,29 @@ function describePentagi(status: PentagiStatus | null) {
         ? '已关闭 · pg_terminal 走本机 shell'
         : sandboxReady
           ? `${status.sandbox?.image ?? 'vxcontrol/kali-linux'} · ${status.sandbox?.inspect ?? '已 pull'}`
-          : `未 pull · docker pull ${status.sandbox?.image ?? 'vxcontrol/kali-linux'}`,
+          : probingExtras
+            ? '镜像探测中…'
+            : `未 pull · docker pull ${status.sandbox?.image ?? 'vxcontrol/kali-linux'}`,
     },
     {
       name: 'DinD',
       ok: dindOn && sandboxReady,
-      note: dindOn
-        ? (status.sandbox?.dind?.note ?? 'Kali 内 docker CLI 挂 VM sock')
-        : '关闭 · Kali 里没有 docker daemon',
+      note: !dindOn
+        ? '关闭 · Kali 里没有 docker daemon'
+        : sandboxReady
+          ? (status.sandbox?.dind?.note ?? 'Kali 内 docker CLI 挂 VM sock')
+          : probingExtras
+            ? '随 Kali 镜像探测中…'
+            : 'Kali 镜像未就绪',
     },
     { name: '编排内核', ok: true, note: '随模式注入，无需安装' },
     {
       name: '向量检索',
       ok: source === 'local' ? localOk : source === 'api' ? Boolean(status.embedding?.hasKey && status.embedding?.apiUrl) : false,
       note: source === 'local'
-        ? (localOk ? `本机 sidecar :${status.embedding?.port ?? 63229} · ${status.embedding?.model ?? 'bge-small'}` : '本机未启动（约 0.5GB，点下面启动）')
+        ? (localOk
+          ? `本机 sidecar :${status.embedding?.port ?? 63229} · ${status.embedding?.model ?? 'bge-small'}`
+          : (status.embedding?.local?.skipped ? '正在拉起本机 sidecar…' : '本机未启动（约 0.5GB，点下面启动）'))
         : source === 'api'
           ? (status.embedding?.apiUrl ? `独立 API · ${status.embedding.apiModel || 'text-embedding-3-small'}` : '已选独立 API，但还没填地址')
           : '关闭 · 与调度模型分开，不占内存',
@@ -946,28 +760,44 @@ function PentagiSection() {
     pollTimer.current = setInterval(fetchLogs, 500)
   }, [fetchLogs])
 
-  const refresh = useCallback(async () => {
-    setLoading(true)
+  const refresh = useCallback(async (opts: { full?: boolean } = {}) => {
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => controller.abort(), 8_000)
     try {
-      const [profilesRes, modelsRes] = await Promise.all([
-        fetch('/api/coldbrew/profiles'),
-        fetch('/api/coldbrew/pentagi/models'),
-      ])
-      const profilesData = await profilesRes.json()
-      const modelsData = await modelsRes.json().catch(() => ({}))
-      setPentagi({
-        ...(profilesData.pentagi ?? {}),
-        ...(modelsData.harness ? { harness: modelsData.harness, harnessProvider: modelsData.harnessProvider } : {}),
-      })
+      const res = await fetch(opts.full ? '/api/coldbrew/pentagi?full=1' : '/api/coldbrew/pentagi', { signal: controller.signal })
+      const data = await res.json().catch(() => ({}))
+      setPentagi(prev => ({ ...(prev ?? {}), ...data }))
     } catch (error) {
       console.error('Failed to fetch pentagi status', error)
+      setPentagi(prev => prev ?? {
+        version: '1.0.0',
+        error: error instanceof Error ? error.message : '探测超时',
+        docker: { ok: false },
+        api: { ok: false, url: 'https://127.0.0.1:8443' },
+        backendReady: false,
+      })
     } finally {
+      window.clearTimeout(timer)
       setLoading(false)
+    }
+    if (!opts.full) {
+      fetch('/api/coldbrew/pentagi/models').then(async res => {
+        const modelsData = await res.json().catch(() => ({}))
+        setPentagi(prev => {
+          const incoming = modelsData.harness
+          const keep = incoming?.providers?.length ? incoming : prev?.harness
+          return {
+            ...(prev ?? {}),
+            ...modelsData,
+            ...(keep ? { harness: keep, harnessProvider: modelsData.harnessProvider || prev?.harnessProvider } : {}),
+          }
+        })
+      }).catch(() => { /* models snapshot is optional */ })
     }
   }, [])
 
   useEffect(() => {
-    refresh()
+    refresh().then(() => { void refresh({ full: true }) })
     return () => { if (pollTimer.current) clearInterval(pollTimer.current) }
   }, [refresh])
 
@@ -1013,7 +843,7 @@ function PentagiSection() {
       showToast(`同步失败: ${error.message}`)
     } finally {
       setBusy(false)
-      await refresh()
+      await refresh({ full: true })
     }
   }
 
@@ -1036,7 +866,7 @@ function PentagiSection() {
         pollTimer.current = null
       }
       setBusy(false)
-      await refresh()
+      await refresh({ full: true })
     }
   }
 
@@ -1065,7 +895,7 @@ function PentagiSection() {
         pollTimer.current = null
       }
       setBusy(false)
-      await refresh()
+      await refresh({ full: true })
     }
   }
 
@@ -1092,7 +922,7 @@ function PentagiSection() {
         pollTimer.current = null
       }
       setBusy(false)
-      await refresh()
+      await refresh({ full: true })
     }
   }
 
@@ -1121,7 +951,7 @@ function PentagiSection() {
         pollTimer.current = null
       }
       setBusy(false)
-      await refresh()
+      await refresh({ full: true })
     }
   }
 
@@ -1149,7 +979,7 @@ function PentagiSection() {
         pollTimer.current = null
       }
       setBusy(false)
-      await refresh()
+      await refresh({ full: true })
     }
   }
 
@@ -1172,7 +1002,7 @@ function PentagiSection() {
         pollTimer.current = null
       }
       setBusy(false)
-      await refresh()
+      await refresh({ full: true })
     }
   }
 
@@ -1191,7 +1021,7 @@ function PentagiSection() {
         <PentagiCard
           status={pentagi}
           busy={busy}
-          onProbe={() => { void refresh() }}
+          onProbe={() => { void refresh({ full: true }) }}
           onStart={() => { void startPentagi() }}
           onStop={() => { void stopPentagi() }}
           onConfig={(patch) => { void savePentagiConfig(patch) }}
@@ -1298,7 +1128,7 @@ function ManagerSection() {
       setProfiles(profilesData.profiles ?? [])
       setDefaultOn(profilesData.defaultEnabled === true)
       setArmorMode(profilesData.armorMode === 'reverify' ? 'reverify' : profilesData.armorMode === 'pentagi' ? 'pentagi' : 'coldbrew')
-      setReverify(profilesData.reverify ?? null)
+      if (profilesData.reverify && profilesData.reverify.skipped !== true) setReverify(profilesData.reverify)
       const statusData = await statusRes.json()
       setStatus(statusData)
       // 这两个接口答上来，本身就证明后端在线——它就是提供这些接口的那个进程。
@@ -1307,6 +1137,10 @@ function ManagerSection() {
         setBusy(true)
         startPolling()
       }
+      fetch('/api/coldbrew/reverify').then(async res => {
+        const data = await res.json().catch(() => null)
+        if (data) setReverify(data)
+      }).catch(() => { /* reverify probe is optional for first paint */ })
     } catch (error) {
       console.error('Failed to fetch status', error)
       setOnline(false)
@@ -1383,7 +1217,7 @@ function ManagerSection() {
       }
       setInstallingExtra(null)
       setBusy(false)
-      await refresh()
+      await refresh({ full: true })
     }
   }
 
@@ -1424,7 +1258,7 @@ function ManagerSection() {
       if (Array.isArray(payload.logs) && payload.logs.length > 0) setLogs(payload.logs)
       if (!res.ok) throw new Error(payload.error || bodyText || `HTTP ${res.status}`)
       showToast(type === 'install' ? '冷咖啡 Zero 已就绪' : type === 'uninstall' ? '已停用冷咖啡 Zero' : '设置已更新')
-      await refresh()
+      await refresh({ full: true })
     } catch (error: any) {
       showToast(`操作失败: ${error.message}`)
     } finally {
@@ -1640,12 +1474,21 @@ function ManagerSection() {
 export function apply(ctx: ClientContext) {
   installStyles()
 
-  ctx.effect(() => ctx.locale.register(NS, {
-    zh: { 'nav': '破甲管理', 'pentagiNav': 'PentAGI' },
-    en: { 'nav': 'Jailbreak', 'pentagiNav': 'PentAGI' }
-  }), 'dsh-desktop-manager: dictionaries')
+  const locale = optionalService(ctx, 'locale') as ClientContext['locale']
+  const modelDirectories = optionalService(ctx, 'modelDirectories')
+  void modelDirectories
+  try {
+    if (locale?.register) {
+      ctx.effect(() => locale.register(NS, {
+        zh: { 'nav': '破甲管理', 'pentagiNav': 'PentAGI' },
+        en: { 'nav': 'Jailbreak', 'pentagiNav': 'PentAGI' }
+      }), 'dsh-desktop-manager: dictionaries')
+    }
+  } catch { /* locale optional */ }
 
-  const t = ctx.locale.bind(NS)
+  const t = locale?.bind
+    ? locale.bind(NS)
+    : (key: string) => (key === 'nav' ? '破甲管理' : key === 'pentagiNav' ? 'PentAGI' : key)
 
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
@@ -1665,26 +1508,218 @@ export function apply(ctx: ClientContext) {
     inject: () => ({}),
   }, PentagiSection))
 
-  // 输入框内的冷咖啡破甲开关：conversation.input.left 是会话作用域 list 槽位。
-  // 官方 runInject 传入 binding.key（裸 sessionId），与 conversation.input.model 相同。
-  // 不要回写 sessionId/session，否则会盖掉 kit 里的会话快照。
-  ctx.slots.inject('conversation.input.left', () => ctx.slots.register({
-    name: 'conversation.input.left',
-    id: 'coldbrew-toggle',
-    order: 10,
-    locale: NS,
-    inject: (sessionId: string): ColdBrewToggleInjected => {
-      const id = sessionIdOf(sessionId)
-      try {
-        if (!id) return { directory: null, loadDirectory: () => {} }
-        const directory = ctx.modelDirectories?.directoryFor(id)
-        if (directory === undefined) return { directory: null, loadDirectory: () => {} }
-        const loadDirectory = () => { directory.load?.().catch(() => {}) }
-        loadDirectory()
-        return { directory: directory.store, loadDirectory }
-      } catch {
-        return { directory: null, loadDirectory: () => {} }
+  // 输入框开关：不走 React slot 渲染（host 的 useSyncExternalStoreWithSelector 对
+  // 本插件条目抛 "l is not a function"，记忆芯片等 connection 晚挂所以幸免）。
+  // 直接 DOM 注入，完全绕开 host 的 entry 渲染器，绝不触发那个 crash。
+  installComposerToggle(ctx)
+
+  function installComposerToggle(_ctx: ClientContext) {
+    const PROFILE_WAKE: Record<string, string> = {
+      grok: '[[ENI:PROFILE=MAX]]',
+      claude: '[[CB:MAX]]',
+      glm: 'BREAK//OPEN',
+      deepseek: 'BREAK//OPEN',
+      codex: '[[ENI:PROFILE=MAX]]',
+    }
+    const state = {
+      enabled: false,
+      mode: 'pentagi',
+      profileId: 'grok' as string,
+      busy: false,
+      sessionId: '',
+      model: '',
+    }
+
+    const modeLabel = (mode: string) => (
+      mode === 'reverify' ? 'Reverify' : mode === 'pentagi' ? 'PentAGI' : '冷咖啡'
+    )
+    const profileLabel = (id: string) => PROFILE_LABELS[id] ?? id
+    const wakePhrase = () => (
+      state.mode === 'reverify' ? '[[RV:VERIFY]]'
+        : state.mode === 'pentagi' ? '[[PG:OPEN]]'
+          : (PROFILE_WAKE[state.profileId] ?? 'BREAK//OPEN')
+    )
+
+    const visible = (el: Element | null): el is HTMLElement => {
+      if (!(el instanceof HTMLElement)) return false
+      const s = getComputedStyle(el)
+      if (s.display === 'none' || s.visibility === 'hidden') return false
+      const r = el.getBoundingClientRect()
+      return r.width > 8 && r.height > 8
+    }
+
+    const findToolsRow = (): HTMLElement | null => {
+      const rows = Array.from(document.querySelectorAll('[class*="_tools"]')) as HTMLElement[]
+      return rows.find(el => visible(el) && /完全权限|记忆/.test(el.textContent || '')) ?? null
+    }
+
+    const currentModel = (): string => {
+      const slot = document.querySelector('[data-slot="conversation.input.model"]')
+      const raw = String(slot?.textContent ?? '').replace(/\s+/g, ' ').trim()
+      const cleaned = raw
+        .replace(/PentAGI|冷咖啡|Reverify/gi, '')
+        .replace(/^[·\s]+|[·\s]+$/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+      return cleaned
+    }
+
+    const shortModel = (raw: string): string => {
+      const text = String(raw ?? '').replace(/\s+/g, ' ').trim()
+      return text || profileLabel(state.profileId)
+    }
+
+    const currentSessionId = (): string => {
+      const href = location.href
+      const fromPath = href.match(/\/(?:session|s|chat)\/([^/?#]+)/i)?.[1]
+      if (fromPath) return decodeURIComponent(fromPath)
+      const hash = location.hash.match(/(?:session|s)=([^&]+)/i)?.[1]
+      if (hash) return decodeURIComponent(hash)
+      const query = new URLSearchParams(location.search).get('session')
+      if (query) return query
+      const attr = document.querySelector('[data-session-id]')?.getAttribute('data-session-id')
+      if (attr) return attr
+      const selected = document.querySelector('[aria-current="page"], [aria-selected="true"]')
+      const key = selected?.getAttribute('data-session-id') || selected?.getAttribute('data-id')
+      if (key) return key
+      return `dom-${encodeURIComponent(location.pathname + location.hash) || 'current'}`
+    }
+
+    const toast = (text: string, ok = true) => {
+      const el = document.createElement('div')
+      el.className = ok ? 'dsm-copy-toast' : 'dsm-copy-toast dsm-copy-toast-err'
+      el.textContent = text
+      document.body.appendChild(el)
+      window.setTimeout(() => el.remove(), 1600)
+    }
+
+    const paint = (root: HTMLElement) => {
+      const on = state.enabled
+      if (on) root.setAttribute('data-on', '')
+      else root.removeAttribute('data-on')
+      const sw = root.querySelector('.dsm-toggle-switch') as HTMLButtonElement | null
+      const label = root.querySelector('.dsm-toggle-label') as HTMLElement | null
+      const extra = root.querySelector('.dsm-toggle-profile') as HTMLElement | null
+      if (sw) {
+        sw.setAttribute('aria-checked', on ? 'true' : 'false')
+        sw.disabled = state.busy
+        sw.title = on ? `关闭${modeLabel(state.mode)}` : `开启${modeLabel(state.mode)}`
       }
-    },
-  }, ColdBrewToggle))
+      if (label) label.textContent = modeLabel(state.mode)
+      if (extra) extra.textContent = on ? ` · ${shortModel(state.model)}` : ''
+      root.title = on
+        ? `${shortModel(state.model)} · ${modeLabel(state.mode)} 已开`
+        : `开启后按当前模型匹配破甲席位`
+    }
+
+    const pull = async (root: HTMLElement) => {
+      const sessionId = currentSessionId()
+      const model = currentModel()
+      state.sessionId = sessionId
+      state.model = model
+      state.profileId = matchProfileId(model)
+      try {
+        const q = new URLSearchParams()
+        if (model) q.set('model', model)
+        q.set('blank', '1')
+        const res = await fetch(`/api/coldbrew/session/${encodeURIComponent(sessionId)}?${q}`)
+        if (!res.ok) return
+        const data = await res.json()
+        state.enabled = data.enabled === true
+        if (data.mode === 'reverify' || data.mode === 'pentagi' || data.mode === 'coldbrew') state.mode = data.mode
+        if (typeof data.profileId === 'string' && data.profileId) state.profileId = data.profileId
+        else state.profileId = matchProfileId(model || data.model)
+      } catch { /* keep last known */ }
+      paint(root)
+    }
+
+    const toggle = async (root: HTMLElement) => {
+      if (state.busy) return
+      state.busy = true
+      paint(root)
+      try {
+        const next = !state.enabled
+        const res = await fetch(`/api/coldbrew/session/${encodeURIComponent(currentSessionId())}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: next, model: currentModel(), mode: state.mode }),
+        })
+        if (!res.ok) throw new Error(await res.text())
+        const data = await res.json()
+        state.enabled = data.enabled === true
+        if (data.mode === 'reverify' || data.mode === 'pentagi' || data.mode === 'coldbrew') state.mode = data.mode
+        state.profileId = typeof data.profileId === 'string' && data.profileId
+          ? data.profileId
+          : matchProfileId(currentModel())
+        toast(state.enabled
+          ? `${profileLabel(state.profileId)} · ${modeLabel(state.mode)} 已开`
+          : `${modeLabel(state.mode)} 已关`)
+      } catch (err: any) {
+        toast(err?.message ?? '开关失败', false)
+      } finally {
+        state.busy = false
+        paint(root)
+      }
+    }
+
+    const copyWake = () => {
+      const phrase = wakePhrase()
+      try { navigator.clipboard.writeText(phrase).catch(() => { writeClipboard(phrase) }) } catch { writeClipboard(phrase) }
+      toast(state.enabled
+        ? `${profileLabel(state.profileId)} · ${modeLabel(state.mode)} 已开，直接发任务`
+        : `已复制 ${profileLabel(state.profileId)} 口令 ${phrase}`)
+    }
+
+    const makePill = () => {
+      const root = document.createElement('div')
+      root.setAttribute('data-dsh-coldbrew-toggle', '')
+      root.className = 'dsm-composer-toggle dsm-composer-toggle-dom'
+      root.innerHTML = [
+        '<button type="button" class="dsm-toggle-switch" role="switch" aria-checked="false" aria-label="开启破甲">',
+        '<span class="dsm-toggle-knob"></span>',
+        '</button>',
+        '<button type="button" class="dsm-phrase-copy dsm-toggle-label">PentAGI</button>',
+        '<span class="dsm-toggle-profile"></span>',
+      ].join('')
+      const sw = root.querySelector('.dsm-toggle-switch') as HTMLButtonElement
+      const label = root.querySelector('.dsm-toggle-label') as HTMLButtonElement
+      sw.addEventListener('click', ev => {
+        ev.preventDefault()
+        ev.stopPropagation()
+        void toggle(root)
+      })
+      label.addEventListener('click', ev => {
+        ev.preventDefault()
+        ev.stopPropagation()
+        copyWake()
+      })
+      paint(root)
+      void pull(root)
+      return root
+    }
+
+    const mount = () => {
+      const tools = findToolsRow()
+      if (!tools) return false
+      const existing = tools.querySelector('[data-dsh-coldbrew-toggle]') as HTMLElement | null
+      if (existing && visible(existing)) {
+        void pull(existing)
+        return true
+      }
+      document.querySelectorAll('[data-dsh-coldbrew-toggle]').forEach(n => {
+        if (!tools.contains(n)) n.remove()
+      })
+      const pill = makePill()
+      const modes = tools.querySelector('[class*="_modes"]')
+      if (modes?.nextSibling) tools.insertBefore(pill, modes.nextSibling)
+      else tools.appendChild(pill)
+      return visible(pill)
+    }
+
+    const tick = () => { try { mount() } catch { /* composer not ready */ } }
+    tick()
+    const observer = new MutationObserver(tick)
+    observer.observe(document.body, { childList: true, subtree: true })
+    window.setInterval(tick, 2500)
+  }
 }

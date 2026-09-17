@@ -1184,6 +1184,53 @@ export function sandboxHostPath(containerPath, env = process.env) {
   return resolve(raw)
 }
 
+/** Map /work and /tmp through a live `docker inspect` mount table, else DSH_HOME. */
+export function mapSandboxPath(containerPath, mounts, env = process.env) {
+  const raw = String(containerPath ?? '').trim()
+  if (mounts && typeof mounts === 'object') {
+    for (const prefix of ['/work', '/tmp']) {
+      if (raw === prefix || raw.startsWith(`${prefix}/`)) {
+        const host = String(mounts[prefix] ?? '').trim()
+        if (!host) continue
+        const rest = raw.slice(prefix.length).replace(/^\/+/, '')
+        return rest ? join(host, rest) : host
+      }
+    }
+  }
+  return sandboxHostPath(raw, env)
+}
+
+function parseInspectMounts(text) {
+  const mounts = {}
+  for (const line of String(text ?? '').split('\n')) {
+    const idx = line.indexOf('=')
+    if (idx <= 0) continue
+    const dest = line.slice(0, idx).trim()
+    const src = line.slice(idx + 1).trim()
+    if (dest && src) mounts[dest] = src
+  }
+  return mounts
+}
+
+async function liveSandboxMounts(env = process.env) {
+  if (!pentagiSandboxEnabled(env)) return null
+  const dockerEnv = spawnEnv(env)
+  const dockerBin = whichDocker('docker', dockerEnv)
+  const inspect = await spawnCommand(
+    dockerBin,
+    ['inspect', '-f', '{{range .Mounts}}{{.Destination}}={{.Source}}\n{{end}}', SANDBOX_CONTAINER_NAME],
+    { timeoutMs: 8_000, env: dockerEnv },
+  )
+  if (!inspect.ok) return null
+  const mounts = parseInspectMounts(inspect.stdout)
+  return Object.keys(mounts).length > 0 ? mounts : null
+}
+
+export async function sandboxFileHostPath(containerPath, env = process.env) {
+  const mounts = await liveSandboxMounts(env)
+  return mapSandboxPath(containerPath, mounts, env)
+}
+
 export function unwrapDuckDuckGoHref(href) {
   try {
     const absolute = href.startsWith('//') ? `https:${href}` : href
@@ -2030,29 +2077,29 @@ async function executePentagiTool(name, args = {}, env = process.env) {
       return runTerminal(a, env)
     case 'pg_file': {
       const requested = String(a.path ?? '')
-      const filePath = sandboxHostPath(requested, env)
-      if (a.action === 'read_file') {
-        if (!existsSync(filePath)) return { ok: false, error: `missing ${filePath}`, requested, mapped: filePath }
-        const content = readFileSync(filePath, 'utf8')
-        return { ok: true, path: filePath, requested, bytes: content.length, content: content.slice(0, 200_000) }
-      }
-      if (a.action === 'write_file') {
-        mkdirSync(dirname(filePath), { recursive: true })
-        writeFileSync(filePath, String(a.content ?? ''))
-        return { ok: true, path: filePath, requested, bytes: String(a.content ?? '').length, action: 'write_file' }
-      }
-      if (a.action === 'edit_file') {
-        if (!existsSync(filePath)) return { ok: false, error: `missing ${filePath}`, requested, mapped: filePath }
-        const original = readFileSync(filePath, 'utf8')
-        try {
+      try {
+        const filePath = await sandboxFileHostPath(requested, env)
+        if (a.action === 'read_file') {
+          if (!existsSync(filePath)) return { ok: false, error: `missing ${filePath}`, requested, mapped: filePath }
+          const content = readFileSync(filePath, 'utf8')
+          return { ok: true, path: filePath, requested, bytes: content.length, content: content.slice(0, 200_000) }
+        }
+        if (a.action === 'write_file') {
+          mkdirSync(dirname(filePath), { recursive: true })
+          writeFileSync(filePath, String(a.content ?? ''))
+          return { ok: true, path: filePath, requested, bytes: String(a.content ?? '').length, action: 'write_file' }
+        }
+        if (a.action === 'edit_file') {
+          if (!existsSync(filePath)) return { ok: false, error: `missing ${filePath}`, requested, mapped: filePath }
+          const original = readFileSync(filePath, 'utf8')
           const next = applyEdit(original, a.diff)
           writeFileSync(filePath, next)
           return { ok: true, path: filePath, requested, action: 'edit_file', bytes: next.length }
-        } catch (error) {
-          return { ok: false, error: String(error.message), requested, mapped: filePath }
         }
+        return { ok: false, error: 'action must be read_file|write_file|edit_file' }
+      } catch (error) {
+        return { ok: false, error: String(error?.message ?? error), requested }
       }
-      return { ok: false, error: 'action must be read_file|write_file|edit_file' }
     }
     case 'pg_browser': {
       const target = String(a.url ?? '')

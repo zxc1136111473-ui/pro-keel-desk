@@ -70,8 +70,16 @@ function ensureTuiProfile() {
 }
 
 function withFusedPatch(args) {
-  if (args.includes('--patch') || !fusedPatch) return args
-  return [...args, '--patch', fusedPatch]
+  if (!fusedPatch || args.includes('--patch')) return args
+  // `--patch` is a launcher flag. Append it after the profile and the TUI
+  // app treats it as unknown (`error: unknown option '--patch'`).
+  if (args[0] === '--profile' && args[1]) {
+    return ['--profile', args[1], '--patch', fusedPatch, ...args.slice(2)]
+  }
+  if (args[0] === 'web') {
+    return ['--patch', fusedPatch, 'web', ...args.slice(1)]
+  }
+  return ['--patch', fusedPatch, ...args]
 }
 
 function rewriteArgv(argv) {

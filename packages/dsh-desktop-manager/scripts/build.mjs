@@ -31,6 +31,7 @@ function run(command, args) {
 await rm(outDir, { recursive: true, force: true })
 await mkdir(outDir, { recursive: true })
 await copyFile(join(pluginRoot, 'src', 'index.mjs'), join(outDir, 'index.mjs'))
+await copyFile(join(pluginRoot, 'src', 'optional-service.mjs'), join(outDir, 'optional-service.mjs'))
 await copyFile(join(pluginRoot, 'src', 'reverify.mjs'), join(outDir, 'reverify.mjs'))
 await copyFile(join(pluginRoot, 'src', 'reverify-bridge.py'), join(outDir, 'reverify-bridge.py'))
 await copyFile(join(pluginRoot, 'src', 'pentagi.mjs'), join(outDir, 'pentagi.mjs'))

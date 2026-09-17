@@ -643,7 +643,7 @@ async function main(): Promise<void> {
                 : undefined,
         connection,
         inject: (names: string[], fn: (scope: unknown) => void) => {
-          if (names.includes('connection') && names.includes('webServer')) fn(fakeCtx);
+          if (names.includes('webServer')) fn(fakeCtx);
         },
         on: () => () => {},
         effect: (f: () => (() => void)) => f(),
@@ -2636,7 +2636,7 @@ async function main(): Promise<void> {
       const ctxC = {
         get: (n: string) => (n === 'connection' ? svc : n === 'webServer' ? {} : undefined),
         inject: (names: string[], fn: (scope: unknown) => void) => {
-          if (names.includes('connection') && names.includes('webServer')) fn(ctxC);
+          if (names.includes('webServer')) fn(ctxC);
         },
         on: (_e: string, h: (name: string, impl: unknown) => void) => {
           serviceListener = h;
@@ -2663,6 +2663,40 @@ async function main(): Promise<void> {
       assert(r.ok === true && Array.isArray(r.value.lines), '重挂后的 handler 端点可用');
     } finally {
       await fs.rm(tmpT9, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+
+  console.log('== 17b. connection.rpc.handle 抛 without inject 时改挂 webServer /rpc 前缀 ==');
+  {
+    const tmpPrefix = await fs.mkdtemp(path.join(os.tmpdir(), 'dsh-mem-rpc-prefix-'));
+    try {
+      const routes: Array<{ path: string; handler: (req: unknown, res: unknown) => Promise<void> }> = [];
+      const throwingConn = {
+        rpc: {
+          handle: () => {
+            throw new Error('cannot get property "webServer" without inject');
+          },
+        },
+      };
+      const webServer = {
+        register: (route: { path: string; handler: (req: unknown, res: unknown) => Promise<void> }) => {
+          routes.push(route);
+          return () => {};
+        },
+      };
+      const ctxPrefix = {
+        get: (n: string) => (n === 'connection' ? throwingConn : n === 'webServer' ? webServer : undefined),
+        webServer,
+        inject: (names: string[], fn: (scope: unknown) => void) => {
+          if (names.includes('webServer')) fn(ctxPrefix);
+        },
+        on: () => () => {},
+        effect: (f: () => (() => void)) => f(),
+      } as never;
+      registerMemoryRpc(ctxPrefix, {} as never, {} as never, silentLogger, undefined, undefined, undefined, tmpPrefix);
+      assert(routes.length === 1 && routes[0].path === '/rpc', 'handle 抛错后必须挂 /rpc 前缀');
+    } finally {
+      await fs.rm(tmpPrefix, { recursive: true, force: true }).catch(() => {});
     }
   }
 

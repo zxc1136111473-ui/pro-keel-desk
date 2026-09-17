@@ -15,48 +15,90 @@ const PLUGIN_VERSION = require2("../package.json").version;
 function registerMemoryRpc(ctx, cfg, stores, logger, status, live, modes, dataDir, rebuild, embedManager, sessionInfo) {
   let holding = false;
   let registeredImpl;
+  const rpcHandler = async (endpoint, payload) => {
+    try {
+      const value = await handleEndpoint(endpoint, payload, {
+        ctx,
+        cfg,
+        stores,
+        status,
+        live,
+        modes,
+        dataDir: dataDir ?? resolveDataDir(cfg),
+        logger,
+        rebuild,
+        embedManager,
+        sessionInfo
+      });
+      return { ok: true, value };
+    } catch (err) {
+      return {
+        ok: false,
+        error: { code: "internal", message: err instanceof Error ? err.message : String(err), details: {} }
+      };
+    }
+  };
   const tryRegister = (scope) => {
     if (holding) return;
-    const connection = scope.get("connection");
-    if (!connection?.rpc?.handle) return;
-    try {
-      if (!scope.get("webServer")) return;
-    } catch {
-      return;
-    }
     holding = true;
     let dispose;
+    const connection = (() => {
+      try {
+        if (typeof scope.get === "function") return scope.get("connection");
+      } catch {
+      }
+      return void 0;
+    })();
     try {
-      dispose = connection.rpc.handle("/rpc", async (endpoint, payload) => {
-        try {
-          const value = await handleEndpoint(endpoint, payload, {
-            ctx: scope,
-            cfg,
-            stores,
-            status,
-            live,
-            modes,
-            dataDir: dataDir ?? resolveDataDir(cfg),
-            logger,
-            rebuild,
-            embedManager,
-            sessionInfo
-          });
-          return { ok: true, value };
-        } catch (err) {
-          return {
-            ok: false,
-            error: { code: "internal", message: err instanceof Error ? err.message : String(err), details: {} }
-          };
+      if (connection?.rpc?.handle) {
+        dispose = connection.rpc.handle("/rpc", rpcHandler);
+      }
+    } catch (err) {
+      logger.debug?.(`[memory] connection.rpc.handle \u4E0D\u53EF\u7528\uFF0C\u6539\u6302 webServer \u524D\u7F00\uFF1A${err instanceof Error ? err.message : String(err)}`);
+      dispose = void 0;
+    }
+    if (!dispose && scope.webServer?.register) {
+      dispose = scope.webServer.register({
+        kind: "prefix",
+        path: "/rpc",
+        handler: async (req, res) => {
+          if (req.method !== "POST") {
+            res.setHeader("Allow", "POST");
+            res.writeHead(405);
+            res.end();
+            return;
+          }
+          const rejection = connection?.requestRejection?.(req);
+          if (rejection !== void 0) {
+            res.writeHead(rejection);
+            res.end(rejection === 401 ? "unauthorized" : "forbidden");
+            return;
+          }
+          const chunks = [];
+          for await (const chunk of req) chunks.push(chunk);
+          let body = {};
+          try {
+            body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+          } catch {
+            res.writeHead(400);
+            res.end("body is not JSON");
+            return;
+          }
+          const rawPath = new URL(req.url ?? "/", "http://localhost").pathname;
+          const endpoint = rawPath.startsWith("/rpc/") ? rawPath.slice("/rpc/".length) : String(body.method ?? "");
+          const result = await rpcHandler(endpoint, body.payload);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ type: "server-response", rpcId: body.rpcId, result }));
         }
       });
-    } catch (err) {
+    }
+    if (!dispose) {
       holding = false;
-      logger.warn?.(`[memory] RPC \u6CE8\u518C\u5931\u8D25\uFF1A${err instanceof Error ? err.message : String(err)}`);
+      logger.warn?.("[memory] RPC \u6CE8\u518C\u5931\u8D25\uFF1AwebServer \u4E0E connection.rpc.handle \u90FD\u4E0D\u53EF\u7528");
       return;
     }
     registeredImpl = connection;
-    logger.debug?.("[memory] \u72B6\u6001 RPC \u5DF2\u6CE8\u518C\uFF08/rpc \u2192 dsh-memory/*\uFF09");
+    logger.info?.("[memory] \u72B6\u6001 RPC \u5DF2\u6CE8\u518C\uFF08/rpc \u2192 dsh-memory/*\uFF09");
     disposers.push(() => {
       holding = false;
       void dispose?.();
@@ -66,7 +108,7 @@ function registerMemoryRpc(ctx, cfg, stores, logger, status, live, modes, dataDi
     for (const dispose of disposers.splice(0)) dispose();
   };
   const disposers = [];
-  ctx.inject(["connection", "webServer"], (scope) => {
+  ctx.inject(["webServer"], (scope) => {
     scope.effect(() => {
       tryRegister(scope);
       const off = scope.on("internal/service", (name, impl) => {
