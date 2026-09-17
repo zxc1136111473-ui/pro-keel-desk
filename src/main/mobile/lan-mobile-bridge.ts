@@ -94,6 +94,7 @@ export interface LanMobileBridgeOptions {
   cloudflaredCacheDir?: string
   cloudflaredPath?: string
   pinggySshPath?: string
+  preferredTunnelProvider?: InternetTunnelProvider
   forceCloudflareFailure?: boolean
   createCloudflareTunnel?: (port: number) => Promise<InternetTunnelInstance>
   createPinggyTunnel?: (port: number) => Promise<InternetTunnelInstance>
@@ -182,9 +183,11 @@ export class LanMobileBridge {
   private muxTask?: Promise<void>
   private readonly sessionStreamAborts = new Set<AbortController>()
   private lastConnected = false
+  private preferredTunnelProvider: InternetTunnelProvider = 'cloudflare'
 
   constructor(private readonly options: LanMobileBridgeOptions) {
     this.now = options.now ?? Date.now
+    if (options.preferredTunnelProvider === 'pinggy') this.preferredTunnelProvider = 'pinggy'
   }
 
   async start(): Promise<LanMobileBridgeSnapshot> {
@@ -255,7 +258,8 @@ export class LanMobileBridge {
     await new Promise<void>((resolve) => server.close(() => resolve()))
   }
 
-  async toggleTunnel(enable?: boolean): Promise<LanMobileBridgeSnapshot> {
+  async toggleTunnel(enable?: boolean, provider?: InternetTunnelProvider): Promise<LanMobileBridgeSnapshot> {
+    if (provider === 'cloudflare' || provider === 'pinggy') this.preferredTunnelProvider = provider
     const targetState = enable !== undefined ? enable : !this.tunnelActive
     if (!targetState) {
       // Wait for an in-flight launch, then stop the tunnel it spawned:
@@ -276,7 +280,12 @@ export class LanMobileBridge {
     }
 
     if (this.tunnelActive && this.tunnelInstance?.url) {
-      return this.snapshot()
+      if (this.tunnelInstance.provider === this.preferredTunnelProvider) return this.snapshot()
+      if (this.tunnelInstance) {
+        await this.tunnelInstance.stop().catch(() => undefined)
+        this.tunnelInstance = undefined
+      }
+      this.tunnelActive = false
     }
 
     // A launch is already in flight (the cloudflared download alone can take
@@ -333,6 +342,7 @@ export class LanMobileBridge {
     const port = this.port
     if (!port) throw new Error('Bridge is not running.')
     this.tunnelInstance = await startTunnelWithFallback({
+      preferred: this.preferredTunnelProvider,
       forceCloudflareFailure: this.options.forceCloudflareFailure,
       startCloudflare: () => this.startCloudflareInstance(port),
       startPinggy: () => this.startPinggyInstance(port),
@@ -589,8 +599,11 @@ export class LanMobileBridge {
       try {
         const bodyText = await readBody(request)
         if (bodyText) {
-          const parsed = JSON.parse(bodyText) as { enable?: unknown }
+          const parsed = JSON.parse(bodyText) as { enable?: unknown; provider?: unknown }
           if (typeof parsed.enable === 'boolean') enable = parsed.enable
+          if (parsed.provider === 'cloudflare' || parsed.provider === 'pinggy') {
+            this.preferredTunnelProvider = parsed.provider
+          }
         }
       } catch {}
       // Report an in-progress switch honestly instead of answering with the
@@ -601,7 +614,7 @@ export class LanMobileBridge {
           error: 'A tunnel switch is already in progress.'
         })
       }
-      const snapshot = await this.toggleTunnel(enable)
+      const snapshot = await this.toggleTunnel(enable, this.preferredTunnelProvider)
       const qrSvg = snapshot.pairingUrl
         ? await QRCode.toString(snapshot.pairingUrl, { type: 'svg', margin: 1, width: 260 })
         : undefined

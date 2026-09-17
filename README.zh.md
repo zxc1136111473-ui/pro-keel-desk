@@ -28,7 +28,7 @@ DSH Desktop 把本地 DeepSeek Harness 封装为可安装的桌面应用。它�
 
 ## 下载安装
 
-我们提供稳定版和预览版：**稳定版**可在[官网](https://dshdesktop.com/zh/)下载，推荐日常使用；**预览版**可在 [GitHub Releases](https://github.com/dataelement/dsh-desktop/releases) 中选择标记为 **Pre-release** 的版本。
+我们提供稳定版和预览版：**稳定版**可在[官网](https://dshdesktop.com/zh/)下载，推荐日常使用；**预览版**可在 [GitHub Releases](https://github.com/zxc1136111473-ui/pro-keel-desk/releases) 中选择标记为 **Pre-release** 的版本。
 
 预览版除了包含我们的新增功能，还会积极跟进 DeepSeek Harness 官方最新版本，可能与社区插件不兼容，**不建议普通用户使用**。欢迎愿意尝鲜的用户体验并在社区反馈；经尝鲜用户验证后，我们才会向全体社区用户推送。
 
@@ -70,7 +70,7 @@ PPT 功能保持预装，相关自动提示词仅在选中 PPT 按钮的会话�
 
 Harness 本身始终运行在随机的 `127.0.0.1` 端口。手机访问由独立的配对 Bridge 提供：可以只在局域网内使用，也可以在你选择远程访问时启用临时 Cloudflare Quick Tunnel。桌面端断开连接后，手机会话随即失效。
 
-Cloudflare 启动失败时会尝试 Pinggy。若已显示 Cloudflare 配对链接，但手机无法打开，可点击“**扫码打不开？换一条线路**”切换到 Pinggy。
+打开「互联网连接模式」后，可在 **Cloudflare** 和 **Pinggy** 之间切换全球网络线路。Cloudflare 失败时仍会自动尝试 Pinggy。
 
 ## 安全模式与故障恢复
 
@@ -78,7 +78,7 @@ Cloudflare 启动失败时会尝试 Pinggy。若已显示 Cloudflare 配对链�
 
 从 `Harness` 菜单选择“以安全模式重启…”，应用会使用只包含官方核心 Bundle 的隔离 Profile 启动。正常 Profile 中的第三方插件会被屏蔽，但 Agent、会话、模型配置和工作区仍然可用。你可以从页面顶部的安全模式提示卸载选中的问题插件，或恢复正常启动。
 
-恢复页面会检查插件是否有兼容更新；有可用版本时，可升级对应插件，安全模式还支持批量升级。需要帮助时，鼠标悬停“**微信群**”即可显示二维码，点击 **Discord** 则会打开社区链接。
+恢复页面会检查插件是否有兼容更新；有可用版本时，可升级对应插件，安全模式还支持批量升级。
 
 当正常界面无法进入时，也可以通过 `--safe-mode` 启动。例如 macOS：
 

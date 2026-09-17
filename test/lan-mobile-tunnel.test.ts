@@ -202,6 +202,24 @@ describe('Pinggy Tunnel utilities', () => {
     expect(calls).toEqual(['cloudflare', 'pinggy'])
   })
 
+  it('starts Pinggy first when Pinggy is the preferred internet relay', async () => {
+    const calls: string[] = []
+    const pinggy = fakeTunnel('pinggy', 'https://preferred.a.pinggy.link')
+    const result = await startTunnelWithFallback({
+      preferred: 'pinggy',
+      startCloudflare: async () => {
+        calls.push('cloudflare')
+        return fakeTunnel('cloudflare', 'https://unused.trycloudflare.com')
+      },
+      startPinggy: async () => {
+        calls.push('pinggy')
+        return pinggy
+      }
+    })
+    expect(result).toBe(pinggy)
+    expect(calls).toEqual(['pinggy'])
+  })
+
   it('does not start Pinggy when Cloudflare succeeds', async () => {
     const cloudflare = fakeTunnel(
       'cloudflare',
@@ -312,6 +330,35 @@ describe('LanMobileBridge tunnel state and endpoints', () => {
     expect(body.provider).toBe('pinggy')
     expect(body.url).toBe('https://fallback.a.pinggy.link')
     expect(body.pairingUrl).toContain('https://fallback.a.pinggy.link/pair?token=')
+    expect(stopped).toEqual(['cloudflare'])
+  })
+
+  it('lets the pairing page pick Pinggy as the internet relay', async () => {
+    const stopped: string[] = []
+    const bridge = new LanMobileBridge({
+      harnessUrl: () => 'http://127.0.0.1:3000',
+      port: 0,
+      createCloudflareTunnel: async () =>
+        fakeTunnel('cloudflare', 'https://primary.trycloudflare.com', () =>
+          stopped.push('cloudflare')
+        ),
+      createPinggyTunnel: async () => fakeTunnel('pinggy', 'https://chosen.a.pinggy.link')
+    })
+    bridges.push(bridge)
+    const snapshot = await bridge.start()
+    await bridge.toggleTunnel(true)
+    expect(bridge.snapshot().tunnelProvider).toBe('cloudflare')
+
+    const response = await fetch(`http://127.0.0.1:${snapshot.port}/desktop/tunnel/toggle`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ enable: true, provider: 'pinggy' })
+    })
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body.ok).toBe(true)
+    expect(body.provider).toBe('pinggy')
+    expect(body.url).toBe('https://chosen.a.pinggy.link')
     expect(stopped).toEqual(['cloudflare'])
   })
 

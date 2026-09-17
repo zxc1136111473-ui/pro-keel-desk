@@ -13,7 +13,7 @@ DSH Desktop currently pins `@deepseek-ai/dsh@0.1.1-rc.2`. Windows packages bundl
 ## Local setup
 
 ```bash
-git clone https://github.com/dataelement/dsh-desktop.git
+git clone https://github.com/zxc1136111473-ui/pro-keel-desk.git
 cd dsh-desktop
 npm ci
 npm run dev

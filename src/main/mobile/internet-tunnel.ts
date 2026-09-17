@@ -12,22 +12,28 @@ export interface InternetTunnelInstance {
 export async function startTunnelWithFallback(options: {
   startCloudflare: () => Promise<InternetTunnelInstance>
   startPinggy: () => Promise<InternetTunnelInstance>
+  preferred?: InternetTunnelProvider
   forceCloudflareFailure?: boolean
   log?: (message: string) => void
 }): Promise<InternetTunnelInstance> {
+  const preferred = options.preferred ?? 'cloudflare'
+  const primary = preferred === 'pinggy' ? options.startPinggy : options.startCloudflare
+  const secondary = preferred === 'pinggy' ? options.startCloudflare : options.startPinggy
+  const primaryName = preferred === 'pinggy' ? 'Pinggy' : 'Cloudflare'
+  const secondaryName = preferred === 'pinggy' ? 'Cloudflare' : 'Pinggy'
   try {
-    if (options.forceCloudflareFailure) {
+    if (preferred === 'cloudflare' && options.forceCloudflareFailure) {
       throw new Error('Cloudflare failure forced by DSH_TUNNEL_FORCE_PINGGY')
     }
-    return await options.startCloudflare()
-  } catch (cloudflareError) {
-    const cloudflareMessage = errorMessage(cloudflareError)
-    options.log?.(`[tunnel] Cloudflare unavailable, falling back to Pinggy: ${cloudflareMessage}`)
+    return await primary()
+  } catch (primaryError) {
+    const primaryMessage = errorMessage(primaryError)
+    options.log?.(`[tunnel] ${primaryName} unavailable, falling back to ${secondaryName}: ${primaryMessage}`)
     try {
-      return await options.startPinggy()
-    } catch (pinggyError) {
+      return await secondary()
+    } catch (secondaryError) {
       throw new Error(
-        `Unable to create an internet tunnel. Cloudflare: ${cloudflareMessage}; Pinggy: ${errorMessage(pinggyError)}`
+        `Unable to create an internet tunnel. ${primaryName}: ${primaryMessage}; ${secondaryName}: ${errorMessage(secondaryError)}`
       )
     }
   }

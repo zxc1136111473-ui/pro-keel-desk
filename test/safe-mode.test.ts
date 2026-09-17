@@ -285,6 +285,8 @@ describe('Safe Mode', () => {
     expect(html).toContain("default-src 'none'")
     expect(html).not.toContain('http://')
     // Community links may open externally; the recovery UI still loads entirely offline.
+    expect(html).not.toContain('community-discord')
+    expect(html).not.toContain('discord.gg')
     expect(html).not.toMatch(/(?:src|srcset)=["']https?:/)
     expect(html).toContain("img-src 'self' file:")
   })
