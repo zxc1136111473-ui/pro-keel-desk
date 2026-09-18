@@ -1172,6 +1172,57 @@ export async function startPentagiRuntime(onLog = () => {}, env = process.env) {
   } catch (error) {
     onLog(`同步 Harness 模型失败：${error?.message ?? error}`)
   }
+
+  // 破甲 LLM 代理接管：desktop-settings.json coldbrew.pentagi.llmProxyUrl 存在时，
+  // 强制把远端 LLM 指向本地破甲代理（注入授权内核，远端 pentester/assistant 不再拒绝破解类任务）。
+  try {
+    const pentagiCfg = readPentagiSettings(env)
+    if (pentagiCfg.llmProxyUrl) {
+      const dest = join(root, '.env')
+      let text = existsSync(dest) ? readFileSync(dest, 'utf8') : ''
+      const setEnv = (k, v) => {
+        const re = new RegExp(`^${k}=.*$`, 'm')
+        if (re.test(text)) text = text.replace(re, `${k}=${v}`)
+        else text += `\n${k}=${v}\n`
+      }
+      const proxyUrl = String(pentagiCfg.llmProxyUrl).replace(/\/$/, '')
+      const proxyModel = String(pentagiCfg.llmProxyModel || 'deepseek-v4-pro')
+      const containerUrl = proxyUrl
+        .replace(/^http:\/\/localhost(?!\S)/, 'http://host.docker.internal')
+        .replace(/127\.0\.0\.1/, 'host.docker.internal')
+      setEnv('LLM_SERVER_URL', containerUrl)
+      setEnv('LLM_SERVER_KEY', 'sk-armor-proxy')
+      setEnv('LLM_SERVER_MODEL', proxyModel)
+      setEnv('LLM_SERVER_PROVIDER', '')
+      try {
+        const { writeCustomProviderYaml } = await import('./pentagi-providers.mjs')
+        writeCustomProviderYaml(join(userHome(env), 'pentagi', 'custom.provider.yml'), proxyModel)
+      } catch {}
+      writeFileSync(dest, text)
+      onLog(`破甲 LLM 代理已接管：${containerUrl} (model=${proxyModel})`)
+      // 若本地破甲代理未在监听，自动拉起（防容器指向死端口）。
+      try {
+        const proxyPort = Number(new URL(proxyUrl).port || 0)
+        const probe = await fetch(`http://127.0.0.1:${proxyPort}/healthz`, { signal: AbortSignal.timeout(1500) }).catch(() => null)
+        if (!probe || !probe.ok) {
+          const proxyScript = join(userHome(env), 'pentagi', 'armor-proxy.py')
+          if (existsSync(proxyScript)) {
+            const child = spawn('python3', [proxyScript, String(proxyPort)], { cwd: dirname(proxyScript), detached: true, stdio: 'ignore' })
+            child.unref()
+            onLog(`破甲 LLM 代理未监听，已拉起：127.0.0.1:${proxyPort}`)
+            await new Promise(r => setTimeout(r, 1500))
+          } else {
+            onLog(`破甲 LLM 代理脚本缺失：${proxyScript}`)
+          }
+        }
+      } catch (proxyErr) {
+        onLog(`破甲 LLM 代理自启检查失败：${proxyErr?.message ?? proxyErr}`)
+      }
+    }
+  } catch (error) {
+    onLog(`破甲 LLM 代理接管失败：${error?.message ?? error}`)
+  }
+
   let up = { ok: false, stderr: '', stdout: '' }
   for (let attempt = 1; attempt <= 4; attempt++) {
     onLog(`$ docker compose up -d  (${root})  attempt ${attempt}/4`)
